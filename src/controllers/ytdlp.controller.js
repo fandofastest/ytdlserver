@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 const { generateSha256 } = require("../utils/hash.util");
 const cacheService = require("../cache/cache.service");
 const ytDlpService = require("../services/ytdlp.service");
@@ -55,7 +55,7 @@ async function download(req, res, next) {
     const { url, format } = req.body;
 
     // Generate unique UUID for tracking download task and output filename
-    const downloadId = uuidv4();
+    const downloadId = crypto.randomUUID();
 
     // Start background spawn process in queue
     ytDlpService.startDownload(downloadId, url, format || "best");
