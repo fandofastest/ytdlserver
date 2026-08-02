@@ -4,6 +4,8 @@ const cors = require("cors");
 const compression = require("compression");
 const morgan = require("morgan");
 const path = require("path");
+const swaggerUi = require("swagger-ui-express");
+const swaggerDocument = require("./docs/swagger.json");
 const logger = require("./utils/logger.util");
 const { apiRateLimiter } = require("./middleware/rateLimiter.middleware");
 const { errorHandler, notFoundHandler } = require("./middleware/error.middleware");
@@ -15,8 +17,10 @@ const app = express();
 // Trust reverse proxy headers (Nginx / Whatbox / Cloudflare)
 app.set("trust proxy", 1);
 
-// Security Headers with Helmet
-app.use(helmet());
+// Security Headers with Helmet (CSP disabled to allow Swagger UI inline assets)
+app.use(helmet({
+  contentSecurityPolicy: false
+}));
 
 // Cross-Origin Resource Sharing (CORS)
 app.use(cors({
@@ -37,6 +41,9 @@ app.use(morgan("short", { stream: logger.morganStream }));
 
 // Rate Limiting Middleware
 app.use(apiRateLimiter);
+
+// Serve Interactive Swagger API Documentation
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Serve static directory if needed (downloads directory)
 app.use("/public", express.static(path.join(__dirname, "public")));

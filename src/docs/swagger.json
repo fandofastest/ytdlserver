@@ -1,0 +1,308 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "yt-dlp Express REST API",
+    "version": "1.0.0",
+    "description": "Production-ready Universal Video/Audio Metadata & Download Backend API for Flutter using yt-dlp"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current Server Host"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Returns operational status and version of the API.",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "version": { "type": "string", "example": "1.0.0" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analyze": {
+      "post": {
+        "summary": "Analyze Video/Audio URL",
+        "description": "Extracts simplified video and audio metadata, formats, and download options using yt-dlp with SHA256 caching (TTL 10 mins).",
+        "tags": ["Media Analysis"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "example": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "description": "Valid HTTP/HTTPS video or audio URL supported by yt-dlp"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata successfully extracted or fetched from cache",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "cached": { "type": "boolean", "example": false },
+                    "data": {
+                      "$ref": "#/components/schemas/VideoMetadata"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input payload or unsupported URL",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or yt-dlp execution error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/download": {
+      "post": {
+        "summary": "Request Media Download",
+        "description": "Queues an asynchronous download task for the specified URL and format selector.",
+        "tags": ["Media Download"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "example": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                  },
+                  "format": {
+                    "type": "string",
+                    "example": "137+140",
+                    "description": "yt-dlp format selector string (e.g., '137+140', 'best', 'mp4')"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Download task queued successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "downloadId": { "type": "string", "example": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter input",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/status/{id}": {
+      "get": {
+        "summary": "Check Download Task Status",
+        "description": "Retrieves the real-time progress, speed, ETA, and final download URL for a download task ID.",
+        "tags": ["Media Download"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Download task UUID returned by /api/download",
+            "schema": {
+              "type": "string",
+              "example": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "$ref": "#/components/schemas/DownloadStatus"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Download task ID not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/file/{id}": {
+      "get": {
+        "summary": "Download Completed File",
+        "description": "Serves the generated media file for download once processing is completed.",
+        "tags": ["Media Download"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Download task UUID",
+            "schema": {
+              "type": "string",
+              "example": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Media file stream attachment",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "File is still processing and not ready for download",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Task ID not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "410": {
+            "description": "File has expired and was auto-deleted by cleanup service (>30 mins)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "FormatItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "137" },
+          "ext": { "type": "string", "example": "mp4" },
+          "quality": { "type": "string", "example": "1080p" },
+          "fps": { "type": "integer", "nullable": true, "example": 30 },
+          "filesize": { "type": "integer", "nullable": true, "example": 45123456 },
+          "video": { "type": "boolean", "example": true },
+          "audio": { "type": "boolean", "example": false }
+        }
+      },
+      "VideoMetadata": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "example": "Rick Astley - Never Gonna Give You Up (Official Music Video)" },
+          "thumbnail": { "type": "string", "example": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" },
+          "duration": { "type": "integer", "example": 213 },
+          "uploader": { "type": "string", "example": "Rick Astley" },
+          "view_count": { "type": "integer", "example": 1500000000 },
+          "upload_date": { "type": "string", "example": "20091025" },
+          "webpage_url": { "type": "string", "example": "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+          "formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormatItem"
+            }
+          }
+        }
+      },
+      "DownloadStatus": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" },
+          "status": { "type": "string", "enum": ["pending", "processing", "completed", "error"], "example": "completed" },
+          "progress": { "type": "number", "example": 100 },
+          "speed": { "type": "string", "example": "5.20MiB/s" },
+          "eta": { "type": "string", "example": "00:00" },
+          "filename": { "type": "string", "example": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d.mp4" },
+          "downloadUrl": { "type": "string", "nullable": true, "example": "http://yourdomain.com/api/file/9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" },
+          "error": { "type": "string", "nullable": true, "example": null }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string", "example": "Invalid or unsupported URL provided" },
+          "code": { "type": "string", "example": "INVALID_URL" }
+        }
+      }
+    }
+  }
+}
