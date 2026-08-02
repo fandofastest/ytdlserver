@@ -22,6 +22,31 @@ function getExecutablePath() {
   return "yt-dlp";
 }
 
+/**
+ * Builds common yt-dlp command arguments including cookie injection and proxy support.
+ * 
+ * @returns {Array<string>} Common args array.
+ */
+function getCommonArgs() {
+  const args = [
+    "--no-playlist",
+    "--js-runtimes",
+    "node"
+  ];
+
+  // Automatically attach cookies file if present (bypasses CAPTCHA / bot detection)
+  if (config.cookiesPath && fs.existsSync(config.cookiesPath)) {
+    args.push("--cookies", config.cookiesPath);
+  }
+
+  // Automatically attach proxy if configured
+  if (config.proxyUrl) {
+    args.push("--proxy", config.proxyUrl);
+  }
+
+  return args;
+}
+
 class YtDlpService {
   /**
    * Executes yt-dlp to extract single-json metadata for a URL.
@@ -47,9 +72,7 @@ class YtDlpService {
       const executable = getExecutablePath();
       const args = [
         "--dump-single-json",
-        "--no-playlist",
-        "--js-runtimes",
-        "node",
+        ...getCommonArgs(),
         url
       ];
 
@@ -171,9 +194,7 @@ class YtDlpService {
       const outputPattern = path.join(config.downloadsDir, `${downloadId}.%(ext)s`);
 
       const args = [
-        "--no-playlist",
-        "--js-runtimes",
-        "node",
+        ...getCommonArgs(),
         "-f",
         format || "best",
         "-o",
