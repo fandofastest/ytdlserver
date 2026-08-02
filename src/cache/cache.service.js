@@ -13,13 +13,19 @@ const cacheInstance = new NodeCache({
  */
 class CacheService {
   /**
-   * Retrieves item from cache by key.
+   * Retrieves item from cache by key and refreshes TTL (sliding expiration).
    * @param {string} key - Cache key (SHA256 hash).
+   * @param {number} [refreshTtlSeconds] - Seconds to refresh TTL upon access.
    * @returns {Object|null} Cached item or null if not found.
    */
-  get(key) {
+  get(key, refreshTtlSeconds = config.cacheTtlSeconds) {
     const value = cacheInstance.get(key);
-    return value !== undefined ? value : null;
+    if (value !== undefined) {
+      // Sliding Expiration: Refresh TTL on every access so active items stay cached
+      cacheInstance.ttl(key, refreshTtlSeconds);
+      return value;
+    }
+    return null;
   }
 
   /**
