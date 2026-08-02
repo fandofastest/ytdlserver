@@ -12,6 +12,9 @@ const config = require("./config/app.config");
 
 const app = express();
 
+// Trust reverse proxy headers (Nginx / Whatbox / Cloudflare)
+app.set("trust proxy", 1);
+
 // Security Headers with Helmet
 app.use(helmet());
 
