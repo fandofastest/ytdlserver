@@ -17,6 +17,7 @@ function resolveHomePath(filepath) {
 
 const config = {
   port: parseInt(process.env.PORT || "3000", 10),
+  host: process.env.HOST || "0.0.0.0",
   nodeEnv: process.env.NODE_ENV || "production",
   ytDlpPath: resolveHomePath(process.env.YTDLP_PATH || "~/bin/yt-dlp"),
   maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES || "2", 10),
