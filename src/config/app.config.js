@@ -22,6 +22,7 @@ const config = {
   ytDlpPath: resolveHomePath(process.env.YTDLP_PATH || "~/bin/yt-dlp"),
   cookiesPath: resolveHomePath(process.env.YTDLP_COOKIES_PATH || "~/cookies.txt"),
   proxyUrl: process.env.YTDLP_PROXY || null,
+  impersonateTarget: process.env.YTDLP_IMPERSONATE || "Chrome",
   maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES || "2", 10),
   ytDlpTimeoutMs: parseInt(process.env.YTDLP_TIMEOUT_MS || "60000", 10),
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 mins
