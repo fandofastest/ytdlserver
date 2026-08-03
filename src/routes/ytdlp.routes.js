@@ -16,4 +16,7 @@ router.get("/status/:id", ytdlpController.getStatus);
 // GET /api/file/:id - Serve completed downloaded file
 router.get("/file/:id", ytdlpController.getFile);
 
+// POST /api/update - Trigger yt-dlp binary update (-U)
+router.post("/update", ytdlpController.updateYtDlp);
+
 module.exports = router;

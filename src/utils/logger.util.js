@@ -29,6 +29,16 @@ function info(message, meta = null) {
 }
 
 /**
+ * Logs warning messages to stdout.
+ * @param {string} message - Warning message text.
+ * @param {Object} [meta] - Optional metadata object.
+ */
+function warn(message, meta = null) {
+  const metaStr = meta ? ` | ${JSON.stringify(meta)}` : "";
+  console.warn(`[${getTimestamp()}] [WARN] ${message}${metaStr}`);
+}
+
+/**
  * Logs error messages to stderr and error log file.
  * @param {string} message - Error description.
  * @param {Error|Object} [error] - Error object or context.
@@ -52,6 +62,7 @@ const morganStream = {
 
 module.exports = {
   info,
+  warn,
   error,
   morganStream
 };

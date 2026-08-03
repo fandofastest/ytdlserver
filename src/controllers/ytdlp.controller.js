@@ -157,9 +157,26 @@ async function getFile(req, res, next) {
   }
 }
 
+/**
+ * Controller to manually trigger yt-dlp binary update (yt-dlp -U).
+ * POST /api/update
+ */
+async function updateYtDlp(req, res, next) {
+  try {
+    const resultMessage = await ytDlpService.updateBinary();
+    return res.status(200).json({
+      success: true,
+      message: resultMessage
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   analyze,
   download,
   getStatus,
-  getFile
+  getFile,
+  updateYtDlp
 };

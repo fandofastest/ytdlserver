@@ -25,6 +25,7 @@ const config = {
   impersonate: process.env.YTDLP_IMPERSONATE || "chrome",
   userAgent: process.env.YTDLP_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   extractorArgs: process.env.YTDLP_EXTRACTOR_ARGS || null,
+  autoUpdateYtDlp: process.env.YTDLP_AUTO_UPDATE !== "false",
   maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES || "2", 10),
   ytDlpTimeoutMs: parseInt(process.env.YTDLP_TIMEOUT_MS || "60000", 10),
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 mins

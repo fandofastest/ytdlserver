@@ -377,6 +377,45 @@ class YtDlpService {
   getAllJobs() {
     return downloadJobsMap;
   }
+
+  /**
+   * Runs yt-dlp -U to update executable to latest release on GitHub.
+   * 
+   * @returns {Promise<string>} Output result message from yt-dlp.
+   */
+  updateBinary() {
+    return new Promise((resolve, reject) => {
+      const executable = getExecutablePath();
+      logger.info(`Checking and updating yt-dlp binary: ${executable} -U`);
+
+      const child = spawn(executable, ["-U"], { windowsHide: true });
+      let outputData = "";
+
+      child.stdout.on("data", (chunk) => {
+        outputData += chunk.toString();
+      });
+
+      child.stderr.on("data", (chunk) => {
+        outputData += chunk.toString();
+      });
+
+      child.on("error", (err) => {
+        logger.error("Failed to execute yt-dlp update process", err);
+        reject(new Error(`Failed to execute yt-dlp update: ${err.message}`));
+      });
+
+      child.on("close", (code) => {
+        const trimmed = outputData.trim() || `yt-dlp update process exited with code ${code}`;
+        if (code === 0) {
+          logger.info(`yt-dlp update result: ${trimmed}`);
+          resolve(trimmed);
+        } else {
+          logger.warn(`yt-dlp update exited with code ${code}: ${trimmed}`);
+          resolve(trimmed);
+        }
+      });
+    });
+  }
 }
 
 module.exports = new YtDlpService();

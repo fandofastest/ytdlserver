@@ -2,6 +2,7 @@ const app = require("./src/app");
 const config = require("./src/config/app.config");
 const logger = require("./src/utils/logger.util");
 const cleanupService = require("./src/services/cleanup.service");
+const ytDlpService = require("./src/services/ytdlp.service");
 
 // Initialize server with explicit host and port
 const server = app.listen(config.port, config.host, () => {
@@ -14,6 +15,13 @@ const server = app.listen(config.port, config.host, () => {
 
   // Start background file cleanup worker
   cleanupService.start();
+
+  // Optionally auto-update yt-dlp binary on startup if enabled
+  if (config.autoUpdateYtDlp) {
+    ytDlpService.updateBinary().catch((err) => {
+      logger.warn("Auto-update check for yt-dlp failed:", err.message);
+    });
+  }
 });
 
 // Handle server listen errors (e.g. EPERM, EADDRINUSE on shared hosting like Whatbox)
