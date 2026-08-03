@@ -23,16 +23,30 @@ function getExecutablePath() {
 }
 
 /**
- * Builds common yt-dlp command arguments including cookie injection and proxy support.
+ * Builds common yt-dlp command arguments including cookie injection, proxy, user-agent, and impersonation.
  * 
+ * @param {Object} [options={}] - Execution options.
+ * @param {boolean} [options.disableImpersonate=false] - Disable --impersonate argument if true.
  * @returns {Array<string>} Common args array.
  */
-function getCommonArgs() {
+function getCommonArgs(options = {}) {
   const args = [
     "--no-playlist",
     "--js-runtimes",
     "node"
   ];
+
+  if (config.userAgent) {
+    args.push("--user-agent", config.userAgent);
+  }
+
+  if (!options.disableImpersonate && config.impersonate && config.impersonate !== "none") {
+    args.push("--impersonate", config.impersonate);
+  }
+
+  if (config.extractorArgs) {
+    args.push("--extractor-args", config.extractorArgs);
+  }
 
   // Automatically attach cookies file if present (bypasses CAPTCHA / bot detection)
   if (config.cookiesPath && fs.existsSync(config.cookiesPath)) {
@@ -65,14 +79,16 @@ class YtDlpService {
    * 
    * @private
    * @param {string} url - Target URL.
+   * @param {boolean} [disableImpersonate=false] - Retries execution without --impersonate if curl-cffi is missing.
    * @returns {Promise<Object>} Formatted video metadata.
    */
-  _spawnAnalyze(url) {
+  _spawnAnalyze(url, disableImpersonate = false) {
     return new Promise((resolve, reject) => {
       const executable = getExecutablePath();
+      const commonArgs = getCommonArgs({ disableImpersonate });
       const args = [
         "--dump-single-json",
-        ...getCommonArgs(),
+        ...commonArgs,
         url
       ];
 
@@ -118,6 +134,13 @@ class YtDlpService {
         }
 
         if (code !== 0) {
+          // If impersonation failed because curl-cffi or impersonate target is missing, retry without --impersonate
+          const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
+          if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
+            logger.warn("yt-dlp impersonation failed (curl-cffi missing on host). Retrying analyze without --impersonate...");
+            return this._spawnAnalyze(url, true).then(resolve).catch(reject);
+          }
+
           logger.error(`yt-dlp analyze exited with code ${code}: ${stderrData}`);
           return reject(new Error(`yt-dlp error (${code}): ${stderrData || "Failed to extract metadata"}`));
         }
@@ -178,9 +201,10 @@ class YtDlpService {
    * @param {string} downloadId - Download task ID.
    * @param {string} url - Target URL.
    * @param {string} format - Format selector.
+   * @param {boolean} [disableImpersonate=false] - Retries execution without --impersonate if curl-cffi is missing.
    * @returns {Promise<void>} Resolves when download finishes.
    */
-  _spawnDownload(downloadId, url, format) {
+  _spawnDownload(downloadId, url, format, disableImpersonate = false) {
     return new Promise((resolve, reject) => {
       const job = downloadJobsMap.get(downloadId);
       if (!job) {
@@ -193,8 +217,9 @@ class YtDlpService {
       const executable = getExecutablePath();
       const outputPattern = path.join(config.downloadsDir, `${downloadId}.%(ext)s`);
 
+      const commonArgs = getCommonArgs({ disableImpersonate });
       const args = [
-        ...getCommonArgs(),
+        ...commonArgs,
         "-f",
         format || "best",
         "-o",
@@ -252,6 +277,13 @@ class YtDlpService {
         }
 
         if (code !== 0) {
+          // If impersonation failed because curl-cffi or impersonate target is missing, retry without --impersonate
+          const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
+          if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
+            logger.warn(`Download process ${downloadId} impersonation failed. Retrying download without --impersonate...`);
+            return this._spawnDownload(downloadId, url, format, true).then(resolve).catch(reject);
+          }
+
           job.status = "error";
           job.error = stderrData || `yt-dlp exited with error code ${code}`;
           job.updatedAt = Date.now();
