@@ -19,10 +19,6 @@ function getExecutablePath() {
   if (fs.existsSync(config.ytDlpPath)) {
     return config.ytDlpPath;
   }
-  const localBin = path.join(__dirname, "..", "..", "bin", process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
-  if (fs.existsSync(localBin)) {
-    return localBin;
-  }
   return "yt-dlp";
 }
 
@@ -37,11 +33,6 @@ function getCommonArgs() {
     "--js-runtimes",
     "node"
   ];
-
-  // Attach browser impersonation target (fixes TikTok anti-bot / rehydration issue)
-  if (config.impersonateTarget) {
-    args.push("--impersonate", config.impersonateTarget);
-  }
 
   // Automatically attach cookies file if present (bypasses CAPTCHA / bot detection)
   if (config.cookiesPath && fs.existsSync(config.cookiesPath)) {
