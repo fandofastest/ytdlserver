@@ -28,11 +28,7 @@
       --danger-glow: rgba(239, 68, 68, 0.25);
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -46,10 +42,7 @@
       padding: 2rem 1.5rem;
     }
 
-    .container {
-      max-width: 1280px;
-      margin: 0 auto;
-    }
+    .container { max-width: 1280px; margin: 0 auto; }
 
     header {
       display: flex;
@@ -71,17 +64,9 @@
       gap: 0.75rem;
     }
 
-    .title-area p {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-top: 0.25rem;
-    }
+    .title-area p { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; }
 
-    .actions {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
+    .actions { display: flex; align-items: center; gap: 1rem; }
 
     .toggle-group {
       display: flex;
@@ -107,9 +92,7 @@
       transition: background 0.3s;
     }
 
-    .toggle-switch:checked {
-      background: var(--accent-local);
-    }
+    .toggle-switch:checked { background: var(--accent-local); }
 
     .toggle-switch::before {
       content: '';
@@ -123,9 +106,7 @@
       transition: transform 0.3s;
     }
 
-    .toggle-switch:checked::before {
-      transform: translateX(16px);
-    }
+    .toggle-switch:checked::before { transform: translateX(16px); }
 
     .btn {
       padding: 0.6rem 1.2rem;
@@ -140,23 +121,11 @@
       gap: 0.5rem;
     }
 
-    .btn-primary {
-      background: var(--accent-ytdl);
-      color: white;
-    }
+    .btn-primary { background: var(--accent-ytdl); color: white; }
+    .btn-primary:hover { box-shadow: 0 0 15px var(--accent-ytdl-glow); }
 
-    .btn-primary:hover {
-      box-shadow: 0 0 15px var(--accent-ytdl-glow);
-    }
-
-    .btn-success {
-      background: var(--accent-local);
-      color: white;
-    }
-
-    .btn-success:hover {
-      box-shadow: 0 0 15px var(--accent-local-glow);
-    }
+    .btn-success { background: var(--accent-local); color: white; }
+    .btn-success:hover { box-shadow: 0 0 15px var(--accent-local-glow); }
 
     .btn-danger {
       background: rgba(239, 68, 68, 0.15);
@@ -170,12 +139,6 @@
       box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
     }
 
-    .btn-sm {
-      padding: 0.35rem 0.75rem;
-      font-size: 0.775rem;
-    }
-
-    /* Grid Layout */
     .grid-cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -194,17 +157,12 @@
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .card:hover {
-      transform: translateY(-2px);
-    }
+    .card:hover { transform: translateY(-2px); }
 
     .card::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
+      top: 0; left: 0; right: 0; height: 3px;
     }
 
     .card-local::before { background: var(--accent-local); }
@@ -240,9 +198,7 @@
       letter-spacing: 0.05em;
     }
 
-    .card-icon {
-      font-size: 1.2rem;
-    }
+    .card-icon { font-size: 1.2rem; }
 
     .card-value {
       font-size: 2rem;
@@ -257,7 +213,6 @@
       margin-top: 0.5rem;
     }
 
-    /* Distribution Progress Bar */
     .section-box {
       background: var(--card-bg);
       backdrop-filter: blur(12px);
@@ -287,11 +242,7 @@
       margin-bottom: 1rem;
     }
 
-    .progress-bar-segment {
-      height: 100%;
-      transition: width 0.5s ease;
-    }
-
+    .progress-bar-segment { height: 100%; transition: width 0.5s ease; }
     .segment-local { background: var(--accent-local); }
     .segment-ytdl { background: var(--accent-ytdl); }
     .segment-rapid { background: var(--accent-rapid); }
@@ -304,19 +255,9 @@
       font-size: 0.85rem;
     }
 
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
+    .legend-item { display: flex; align-items: center; gap: 0.5rem; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
 
-    .legend-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-    }
-
-    /* Whitelist Form & List */
     .whitelist-control {
       display: flex;
       gap: 0.75rem;
@@ -337,15 +278,9 @@
       outline: none;
     }
 
-    .ip-input:focus {
-      border-color: var(--accent-ytdl);
-    }
+    .ip-input:focus { border-color: var(--accent-ytdl); }
 
-    .ip-tag-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.6rem;
-    }
+    .ip-tag-list { display: flex; flex-wrap: wrap; gap: 0.6rem; }
 
     .ip-tag {
       background: rgba(30, 41, 59, 0.9);
@@ -366,14 +301,9 @@
       font-weight: bold;
     }
 
-    .ip-tag-remove:hover {
-      color: var(--danger);
-    }
+    .ip-tag-remove:hover { color: var(--danger); }
 
-    /* Table Styling */
-    .table-container {
-      overflow-x: auto;
-    }
+    .table-container { overflow-x: auto; }
 
     table {
       width: 100%;
@@ -396,9 +326,7 @@
       color: var(--text-main);
     }
 
-    tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
-    }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
 
     .badge {
       display: inline-flex;
@@ -434,22 +362,9 @@
       border: 1px solid rgba(239, 68, 68, 0.3);
     }
 
-    .time-col {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-    }
-
-    .latency-tag {
-      font-family: monospace;
-      font-size: 0.8rem;
-      color: var(--accent-latency);
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 2.5rem;
-      color: var(--text-muted);
-    }
+    .time-col { color: var(--text-muted); font-size: 0.8rem; }
+    .latency-tag { font-family: monospace; font-size: 0.8rem; color: var(--accent-latency); }
+    .empty-state { text-align: center; padding: 2.5rem; color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -730,7 +645,6 @@
       document.getElementById('valAvgLatency').innerText = formatLatency(avgLatency);
       document.getElementById('totalReqText').innerText = `Total: ${total.toLocaleString()} Requests`;
 
-      // Calculate percentages
       const pctLocal = total > 0 ? ((local / total) * 100).toFixed(1) : 0;
       const pctYtdl = total > 0 ? ((ytdl / total) * 100).toFixed(1) : 0;
       const pctRapid = total > 0 ? ((rapid / total) * 100).toFixed(1) : 0;
@@ -746,7 +660,6 @@
       document.getElementById('pctRapid').innerText = pctRapid;
       document.getElementById('pctFailed').innerText = pctFailed;
 
-      // Render table history
       const tbody = document.getElementById('historyTableBody');
       const history = data.history || [];
 
@@ -810,7 +723,6 @@
 
     document.getElementById('liveToggle').addEventListener('change', setupPolling);
 
-    // Initial load
     fetchStats();
     fetchWhitelist();
     setupPolling();
