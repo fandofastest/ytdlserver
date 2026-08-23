@@ -236,9 +236,23 @@ class YtDlpService {
    */
   _spawnDownload(downloadId, url, format, disableImpersonate = false) {
     return new Promise((resolve, reject) => {
-      const job = downloadJobsMap.get(downloadId);
+      let job = downloadJobsMap.get(downloadId);
       if (!job) {
-        return reject(new Error(`Download job ${downloadId} not found in state`));
+        job = {
+          id: downloadId,
+          url: url,
+          format: format || "best",
+          status: "pending",
+          progress: 0,
+          speed: "0KiB/s",
+          eta: "00:00",
+          filename: null,
+          filePath: null,
+          error: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        downloadJobsMap.set(downloadId, job);
       }
 
       job.status = "processing";
