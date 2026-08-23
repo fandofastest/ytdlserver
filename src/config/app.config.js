@@ -22,7 +22,7 @@ const config = {
   ytDlpPath: resolveHomePath(process.env.YTDLP_PATH || "~/bin/yt-dlp"),
   cookiesPath: resolveHomePath(process.env.YTDLP_COOKIES_PATH || "~/cookies.txt"),
   proxyUrl: process.env.YTDLP_PROXY || null,
-  impersonate: process.env.YTDLP_IMPERSONATE || "chrome",
+  impersonate: process.env.YTDLP_IMPERSONATE && process.env.YTDLP_IMPERSONATE !== "none" ? process.env.YTDLP_IMPERSONATE : null,
   userAgent: process.env.YTDLP_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   extractorArgs: process.env.YTDLP_EXTRACTOR_ARGS || null,
   autoUpdateYtDlp: process.env.YTDLP_AUTO_UPDATE !== "false",

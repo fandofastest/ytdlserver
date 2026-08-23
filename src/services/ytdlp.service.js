@@ -6,6 +6,7 @@ const logger = require("../utils/logger.util");
 const { parseAndSimplifyYtDlpJson } = require("../utils/ytdlp.util");
 const queueService = require("./queue.service");
 const rapidApiService = require("./rapidapi.service");
+const statsService = require("./stats.service");
 
 // In-memory status map for tracking active and completed download jobs
 const downloadJobsMap = new Map();
@@ -360,6 +361,8 @@ class YtDlpService {
             job.filename = matchedFile;
             job.filePath = path.join(config.downloadsDir, matchedFile);
             job.updatedAt = Date.now();
+            const durationMs = Date.now() - (job.createdAt || Date.now());
+            statsService.recordHit("ytdl", { url, filename: matchedFile, id: downloadId, durationMs });
             logger.info(`Download completed successfully for ID ${downloadId}: ${matchedFile}`);
             resolve();
           } else {
