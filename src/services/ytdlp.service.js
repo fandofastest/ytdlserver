@@ -367,7 +367,14 @@ class YtDlpService {
         // Find created output file matching downloadId prefix in downloads directory
         try {
           const files = fs.readdirSync(config.downloadsDir);
-          const matchedFile = files.find((file) => file.startsWith(downloadId));
+          const matchedFile = files.find((file) => {
+            if (!file.startsWith(downloadId)) return false;
+            const lower = file.toLowerCase();
+            if (lower.endsWith(".part") || lower.endsWith(".ytdl") || lower.endsWith(".tmp") || lower.endsWith(".temp")) {
+              return false;
+            }
+            return true;
+          });
 
           if (matchedFile) {
             job.status = "completed";
@@ -447,20 +454,27 @@ class YtDlpService {
     }
     try {
       const files = fs.readdirSync(config.downloadsDir);
-      const matched = files.find((f) => f.startsWith(fileHash));
+      const matched = files.find((file) => {
+        if (!file.startsWith(fileHash)) return false;
+        const lower = file.toLowerCase();
+        if (lower.endsWith(".part") || lower.endsWith(".ytdl") || lower.endsWith(".tmp") || lower.endsWith(".temp")) {
+          return false;
+        }
+        return true;
+      });
+
       if (matched) {
         const fullPath = path.join(config.downloadsDir, matched);
         const stats = fs.statSync(fullPath);
         if (stats.size > 0) {
           return {
             filename: matched,
-            filePath: fullPath,
-            size: stats.size
+            filePath: fullPath
           };
         }
       }
     } catch (err) {
-      logger.error(`Error checking local file by hash ${fileHash}:`, err);
+      logger.error(`Error finding local file for hash ${fileHash}:`, err);
     }
     return null;
   }
