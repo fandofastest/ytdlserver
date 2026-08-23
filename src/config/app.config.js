@@ -31,7 +31,7 @@ const config = {
   enableRapidApiFallback: process.env.RAPIDAPI_FALLBACK_ENABLED !== "false",
   maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES || "2", 10),
   ytDlpTimeoutMs: parseInt(process.env.YTDLP_TIMEOUT_MS || "60000", 10),
-  ytDlpFastTimeoutMs: parseInt(process.env.YTDLP_FAST_TIMEOUT_MS || "4000", 10),
+  ytDlpFastTimeoutMs: parseInt(process.env.YTDLP_FAST_TIMEOUT_MS || "15000", 10),
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 mins
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
   rateLimitWhitelistIps: (process.env.RATE_LIMIT_WHITELIST_IPS || "127.0.0.1,::1,::ffff:127.0.0.1").split(",").map((ip) => ip.trim()),
