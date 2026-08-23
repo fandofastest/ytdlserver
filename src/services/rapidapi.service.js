@@ -95,9 +95,21 @@ class RapidApiService {
       throw new Error("Could not extract YouTube video ID for RapidAPI fallback");
     }
 
-    const info = await this.fetchMp3Info(videoId);
-    if (!info || info.status === "fail" || !info.link) {
-      throw new Error(info.msg || "RapidAPI did not return a valid download link");
+    let info = null;
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      info = await this.fetchMp3Info(videoId);
+      if (info && info.title) {
+        break;
+      }
+      if (info && info.status === "fail" && info.msg !== "in process") {
+        throw new Error(info.msg || "RapidAPI failed to fetch metadata");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    if (!info) {
+      throw new Error("RapidAPI metadata fetch timed out");
     }
 
     return {
@@ -138,9 +150,22 @@ class RapidApiService {
       throw new Error("Could not extract YouTube video ID for RapidAPI fallback");
     }
 
-    const info = await this.fetchMp3Info(videoId);
-    if (!info || info.status === "fail" || !info.link) {
-      throw new Error(info.msg || "RapidAPI did not return a valid download link");
+    let info = null;
+    const maxAttempts = 10;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      info = await this.fetchMp3Info(videoId);
+      if (info && info.link) {
+        break;
+      }
+      if (info && info.status === "fail" && info.msg !== "in process") {
+        throw new Error(info.msg || "RapidAPI failed to convert video");
+      }
+      logger.info(`RapidAPI conversion in progress for ${videoId} (attempt ${attempt}/${maxAttempts}), waiting 1.5s...`);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    if (!info || !info.link) {
+      throw new Error((info && info.msg) || "RapidAPI conversion timed out");
     }
 
     const targetFileName = `${downloadId}.mp3`;
