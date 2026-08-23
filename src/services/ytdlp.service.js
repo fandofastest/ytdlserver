@@ -5,6 +5,7 @@ const config = require("../config/app.config");
 const logger = require("../utils/logger.util");
 const { parseAndSimplifyYtDlpJson } = require("../utils/ytdlp.util");
 const queueService = require("./queue.service");
+const rapidApiService = require("./rapidapi.service");
 
 // In-memory status map for tracking active and completed download jobs
 const downloadJobsMap = new Map();
@@ -67,10 +68,11 @@ class YtDlpService {
    * Wraps spawn call inside queueService to ensure concurrency control.
    * 
    * @param {string} url - Validated video/audio URL.
+   * @param {Object} [options={}] - Options (e.g. useFastTimeout).
    * @returns {Promise<Object>} Simplified metadata object.
    */
-  async analyzeUrl(url) {
-    return queueService.enqueue(() => this._spawnAnalyze(url));
+  async analyzeUrl(url, options = {}) {
+    return queueService.enqueue(() => this._spawnAnalyze(url, options));
   }
 
   /**
@@ -79,10 +81,15 @@ class YtDlpService {
    * 
    * @private
    * @param {string} url - Target URL.
-   * @param {boolean} [disableImpersonate=false] - Retries execution without --impersonate if curl-cffi is missing.
+   * @param {Object} [options={}] - Options object.
+   * @param {boolean} [options.disableImpersonate=false] - Retries execution without --impersonate if curl-cffi is missing.
+   * @param {boolean} [options.useFastTimeout=false] - Enforces 4s fast timeout before RapidAPI fallback.
    * @returns {Promise<Object>} Formatted video metadata.
    */
-  _spawnAnalyze(url, disableImpersonate = false) {
+  _spawnAnalyze(url, options = {}) {
+    const disableImpersonate = Boolean(options.disableImpersonate);
+    const useFastTimeout = Boolean(options.useFastTimeout);
+
     return new Promise((resolve, reject) => {
       const executable = getExecutablePath();
       const commonArgs = getCommonArgs({ disableImpersonate });
@@ -102,15 +109,17 @@ class YtDlpService {
       let stderrData = "";
       let isTimedOut = false;
 
-      // Enforce execution timeout (60s default)
+      const timeoutMs = useFastTimeout ? config.ytDlpFastTimeoutMs : config.ytDlpTimeoutMs;
+
+      // Enforce execution timeout
       const timer = setTimeout(() => {
         isTimedOut = true;
-        logger.error(`yt-dlp analyze process timed out after ${config.ytDlpTimeoutMs}ms`);
+        logger.error(`yt-dlp analyze process timed out after ${timeoutMs}ms`);
         child.kill("SIGTERM");
         setTimeout(() => {
           if (!child.killed) child.kill("SIGKILL");
         }, 2000);
-      }, config.ytDlpTimeoutMs);
+      }, timeoutMs);
 
       child.stdout.on("data", (chunk) => {
         stdoutData += chunk.toString();
@@ -123,6 +132,12 @@ class YtDlpService {
       child.on("error", (err) => {
         clearTimeout(timer);
         logger.error("Failed to spawn yt-dlp process", err);
+        if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
+          logger.warn(`yt-dlp spawn error for ${url}. Attempting RapidAPI YouTube fallback...`);
+          return rapidApiService.fetchMetadata(url).then(resolve).catch((fbErr) => {
+            reject(new Error(`Failed to execute yt-dlp binary: ${err.message}. Fallback error: ${fbErr.message}`));
+          });
+        }
         reject(new Error(`Failed to execute yt-dlp binary: ${err.message}`));
       });
 
@@ -130,6 +145,12 @@ class YtDlpService {
         clearTimeout(timer);
 
         if (isTimedOut) {
+          if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
+            logger.warn(`yt-dlp analyze timed out for ${url}. Attempting RapidAPI YouTube fallback...`);
+            return rapidApiService.fetchMetadata(url).then(resolve).catch((fbErr) => {
+              reject(new Error(`yt-dlp metadata extraction timed out. Fallback error: ${fbErr.message}`));
+            });
+          }
           return reject(new Error("yt-dlp metadata extraction request timed out"));
         }
 
@@ -138,7 +159,15 @@ class YtDlpService {
           const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
           if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
             logger.warn("yt-dlp impersonation failed (curl-cffi missing on host). Retrying analyze without --impersonate...");
-            return this._spawnAnalyze(url, true).then(resolve).catch(reject);
+            return this._spawnAnalyze(url, { disableImpersonate: true, useFastTimeout }).then(resolve).catch(reject);
+          }
+
+          if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
+            logger.warn(`yt-dlp analyze exited with code ${code}. Attempting RapidAPI YouTube fallback...`);
+            return rapidApiService.fetchMetadata(url).then(resolve).catch((fbErr) => {
+              logger.error(`RapidAPI analyze fallback failed: ${fbErr.message}`);
+              reject(new Error(`yt-dlp error (${code}): ${stderrData || "Failed to extract metadata"}. Fallback error: ${fbErr.message}`));
+            });
           }
 
           logger.error(`yt-dlp analyze exited with code ${code}: ${stderrData}`);
@@ -260,6 +289,16 @@ class YtDlpService {
 
       child.on("error", (err) => {
         clearTimeout(timer);
+        logger.error(`Failed to spawn yt-dlp download process for ${downloadId}`, err);
+        if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
+          logger.warn(`yt-dlp download spawn error for ${downloadId}. Attempting RapidAPI YouTube fallback...`);
+          return rapidApiService.downloadFile(downloadId, url, job).then(resolve).catch((fbErr) => {
+            job.status = "error";
+            job.error = `Failed to execute yt-dlp binary: ${err.message}. Fallback error: ${fbErr.message}`;
+            job.updatedAt = Date.now();
+            reject(new Error(job.error));
+          });
+        }
         job.status = "error";
         job.error = err.message;
         job.updatedAt = Date.now();
@@ -270,6 +309,15 @@ class YtDlpService {
         clearTimeout(timer);
 
         if (isTimedOut) {
+          if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
+            logger.warn(`yt-dlp download process ${downloadId} timed out. Attempting RapidAPI YouTube fallback...`);
+            return rapidApiService.downloadFile(downloadId, url, job).then(resolve).catch((fbErr) => {
+              job.status = "error";
+              job.error = `yt-dlp download timed out. Fallback error: ${fbErr.message}`;
+              job.updatedAt = Date.now();
+              reject(new Error(job.error));
+            });
+          }
           job.status = "error";
           job.error = "Download timed out";
           job.updatedAt = Date.now();
@@ -282,6 +330,16 @@ class YtDlpService {
           if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
             logger.warn(`Download process ${downloadId} impersonation failed. Retrying download without --impersonate...`);
             return this._spawnDownload(downloadId, url, format, true).then(resolve).catch(reject);
+          }
+
+          if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
+            logger.warn(`Download process ${downloadId} exited with code ${code}. Attempting RapidAPI YouTube fallback...`);
+            return rapidApiService.downloadFile(downloadId, url, job).then(resolve).catch((fbErr) => {
+              job.status = "error";
+              job.error = `yt-dlp exited with code ${code}: ${stderrData}. Fallback error: ${fbErr.message}`;
+              job.updatedAt = Date.now();
+              reject(new Error(job.error));
+            });
           }
 
           job.status = "error";
@@ -358,6 +416,36 @@ class YtDlpService {
     }
 
     job.updatedAt = Date.now();
+  }
+
+  /**
+   * Scans downloads directory for an existing local file starting with fileHash prefix.
+   * 
+   * @param {string} fileHash - SHA256 or unique file hash identifier.
+   * @returns {Object|null} Object containing filename and filePath if found, or null.
+   */
+  findLocalFileByHash(fileHash) {
+    if (!fileHash || !fs.existsSync(config.downloadsDir)) {
+      return null;
+    }
+    try {
+      const files = fs.readdirSync(config.downloadsDir);
+      const matched = files.find((f) => f.startsWith(fileHash));
+      if (matched) {
+        const fullPath = path.join(config.downloadsDir, matched);
+        const stats = fs.statSync(fullPath);
+        if (stats.size > 0) {
+          return {
+            filename: matched,
+            filePath: fullPath,
+            size: stats.size
+          };
+        }
+      }
+    } catch (err) {
+      logger.error(`Error checking local file by hash ${fileHash}:`, err);
+    }
+    return null;
   }
 
   /**

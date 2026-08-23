@@ -63,7 +63,7 @@ class CleanupService {
           const stats = fs.statSync(filePath);
           const ageMs = now - stats.mtimeMs;
 
-          if (ageMs > config.fileMaxAgeMs) {
+          if (config.fileMaxAgeMs > 0 && ageMs > config.fileMaxAgeMs) {
             fs.unlinkSync(filePath);
             deletedCount++;
             logger.info(`Auto-deleted stale download file (${Math.round(ageMs / 60000)} mins old): ${file}`);

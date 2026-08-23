@@ -19,4 +19,10 @@ router.get("/file/:id", ytdlpController.getFile);
 // POST /api/update - Trigger yt-dlp binary update (-U)
 router.post("/update", ytdlpController.updateYtDlp);
 
+// GET /api/stream - Direct download stream redirect or link
+router.get("/stream", ytdlpController.stream);
+
+// GET /api/dl/:id - Simple direct download by YouTube Video ID
+router.get("/dl/:id", ytdlpController.downloadByVideoId);
+
 module.exports = router;

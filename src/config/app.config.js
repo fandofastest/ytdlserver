@@ -26,13 +26,17 @@ const config = {
   userAgent: process.env.YTDLP_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   extractorArgs: process.env.YTDLP_EXTRACTOR_ARGS || null,
   autoUpdateYtDlp: process.env.YTDLP_AUTO_UPDATE !== "false",
+  rapidApiKey: process.env.RAPIDAPI_KEY || "0a8f2909afmshd5913885ff5f415p13ad13jsn8f5b5c528145",
+  rapidApiHost: process.env.RAPIDAPI_HOST || "youtube-mp36.p.rapidapi.com",
+  enableRapidApiFallback: process.env.RAPIDAPI_FALLBACK_ENABLED !== "false",
   maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES || "2", 10),
   ytDlpTimeoutMs: parseInt(process.env.YTDLP_TIMEOUT_MS || "60000", 10),
+  ytDlpFastTimeoutMs: parseInt(process.env.YTDLP_FAST_TIMEOUT_MS || "4000", 10),
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 mins
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
   cacheTtlSeconds: parseInt(process.env.CACHE_TTL_SECONDS || "2592000", 10), // 30 days default (2,592,000 seconds)
   cleanupIntervalMs: parseInt(process.env.CLEANUP_INTERVAL_MS || "300000", 10), // 5 minutes
-  fileMaxAgeMs: parseInt(process.env.FILE_MAX_AGE_MS || "1800000", 10), // 30 minutes
+  fileMaxAgeMs: parseInt(process.env.FILE_MAX_AGE_MS || "1800000", 10), // 30 minutes (Set to 0 to keep files permanently for max quota saving)
   downloadsDir: path.join(__dirname, "..", "public", "downloads"),
   logsDir: path.join(__dirname, "..", "logs")
 };

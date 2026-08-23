@@ -1,8 +1,11 @@
 const fs = require("fs");
 const crypto = require("crypto");
+const path = require("path");
+const config = require("../config/app.config");
 const { generateSha256 } = require("../utils/hash.util");
 const cacheService = require("../cache/cache.service");
 const ytDlpService = require("../services/ytdlp.service");
+const rapidApiService = require("../services/rapidapi.service");
 const logger = require("../utils/logger.util");
 
 /**
@@ -54,8 +57,20 @@ async function download(req, res, next) {
   try {
     const { url, format } = req.body;
 
-    // Generate unique UUID for tracking download task and output filename
-    const downloadId = crypto.randomUUID();
+    // Generate unique UUID or deterministic hash (including format) for tracking download task
+    const downloadId = url ? generateSha256(url + (format ? "_" + format : "")) : crypto.randomUUID();
+
+    // Check if file already exists locally (Zero-Quota hit)
+    const existingFile = ytDlpService.findLocalFileByHash(downloadId);
+    if (existingFile) {
+      logger.info(`Zero-Quota hit on download request for hash ${downloadId}: ${existingFile.filename}`);
+      return res.status(200).json({
+        success: true,
+        cached: true,
+        downloadId: downloadId,
+        message: "File is already downloaded and available locally"
+      });
+    }
 
     // Start background spawn process in queue
     ytDlpService.startDownload(downloadId, url, format || "best");
@@ -81,7 +96,27 @@ async function getStatus(req, res, next) {
 
     const job = ytDlpService.getJobStatus(id);
 
+    // If job not in memory, check if file exists locally on disk
     if (!job) {
+      const localFile = ytDlpService.findLocalFileByHash(id);
+      if (localFile) {
+        const host = req.get("host");
+        const protocol = req.protocol;
+        return res.status(200).json({
+          success: true,
+          data: {
+            id: id,
+            status: "completed",
+            progress: 100,
+            speed: "N/A (Local)",
+            eta: "00:00",
+            filename: localFile.filename,
+            downloadUrl: `${protocol}://${host}/public/downloads/${localFile.filename}`,
+            error: null
+          }
+        });
+      }
+
       return res.status(404).json({
         success: false,
         message: `Download task with ID '${id}' not found`,
@@ -91,7 +126,7 @@ async function getStatus(req, res, next) {
 
     const host = req.get("host");
     const protocol = req.protocol;
-    const downloadUrl = job.status === "completed" ? `${protocol}://${host}/api/file/${id}` : null;
+    const downloadUrl = job.status === "completed" ? `${protocol}://${host}/public/downloads/${job.filename || job.id}` : null;
 
     return res.status(200).json({
       success: true,
@@ -119,25 +154,30 @@ async function getFile(req, res, next) {
   try {
     const { id } = req.params;
 
+    // 1. Check in-memory job status map
     const job = ytDlpService.getJobStatus(id);
-
-    if (!job) {
-      return res.status(404).json({
-        success: false,
-        message: `Download file with ID '${id}' not found`,
-        code: "FILE_NOT_FOUND"
+    if (job && job.status === "completed" && job.filePath && fs.existsSync(job.filePath)) {
+      return res.download(job.filePath, job.filename, (err) => {
+        if (err && !res.headersSent) next(err);
       });
     }
 
-    if (job.status !== "completed" || !job.filePath) {
-      return res.status(400).json({
-        success: false,
-        message: `File is not ready for download. Current status: ${job.status}`,
-        code: "FILE_NOT_READY"
+    // 2. Check local disk for existing file starting with id (SHA256 hash or prefix)
+    const localFile = ytDlpService.findLocalFileByHash(id);
+    if (localFile && fs.existsSync(localFile.filePath)) {
+      return res.download(localFile.filePath, localFile.filename, (err) => {
+        if (err && !res.headersSent) next(err);
       });
     }
 
-    if (!fs.existsSync(job.filePath)) {
+    if (job) {
+      if (job.status !== "completed") {
+        return res.status(400).json({
+          success: false,
+          message: `File is not ready for download. Current status: ${job.status}`,
+          code: "FILE_NOT_READY"
+        });
+      }
       return res.status(410).json({
         success: false,
         message: "File has expired or was removed by cleanup service",
@@ -145,12 +185,10 @@ async function getFile(req, res, next) {
       });
     }
 
-    // Trigger attachment file download response
-    return res.download(job.filePath, job.filename, (err) => {
-      if (err && !res.headersSent) {
-        logger.error(`Error sending download attachment for ID ${id}`, err);
-        next(err);
-      }
+    return res.status(404).json({
+      success: false,
+      message: `Download file with ID '${id}' not found`,
+      code: "FILE_NOT_FOUND"
     });
   } catch (err) {
     next(err);
@@ -173,10 +211,185 @@ async function updateYtDlp(req, res, next) {
   }
 }
 
+/**
+ * Controller to handle instant direct download stream request with zero-quota local disk caching.
+ * Checks local disk first for existing MP3 ({urlHash}.mp3).
+ * If missing, downloads media to local disk (yt-dlp first, RapidAPI second) and serves the local file.
+ * GET /api/stream?url=YOUTUBE_URL&redirect=true|false
+ */
+async function stream(req, res, next) {
+  try {
+    const url = req.query.url;
+    const shouldRedirect = req.query.redirect !== "false";
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required query parameter: url"
+      });
+    }
+
+    const host = req.get("host");
+    const protocol = req.protocol;
+    const cacheKey = generateSha256(url);
+
+    // 1. Zero-Quota Check: Check if local file already exists on disk
+    const existingFile = ytDlpService.findLocalFileByHash(cacheKey);
+    if (existingFile) {
+      logger.info(`Zero-Quota Hit: Serving local cached MP3 file for URL hash (${cacheKey}): ${existingFile.filename}`);
+      const localDownloadUrl = `${protocol}://${host}/public/downloads/${existingFile.filename}`;
+      if (shouldRedirect) {
+        return res.redirect(302, localDownloadUrl);
+      }
+      return res.status(200).json({
+        success: true,
+        cached: true,
+        localFile: true,
+        downloadUrl: localDownloadUrl,
+        filename: existingFile.filename
+      });
+    }
+
+    logger.info(`Local file miss for URL hash: ${cacheKey}. Downloading and storing file to local disk.`);
+
+    // 2. Download file to local storage (yt-dlp first, RapidAPI second)
+    const tempJobState = {
+      id: cacheKey,
+      url: url,
+      format: "bestaudio/best",
+      status: "processing",
+      progress: 0,
+      speed: "0KiB/s",
+      eta: "00:00",
+      filename: null,
+      filePath: null,
+      error: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    try {
+      // Try yt-dlp first (saves RapidAPI quota!)
+      await ytDlpService._spawnDownload(cacheKey, url, "bestaudio/best");
+    } catch (err) {
+      // If yt-dlp fails/times out and RapidAPI is available for YouTube, fallback to RapidAPI
+      if (rapidApiService.isYouTubeUrl(url) && config.enableRapidApiFallback) {
+        logger.warn(`yt-dlp download failed/timed out in stream controller for ${url}. Triggering RapidAPI download fallback...`);
+        await rapidApiService.downloadFile(cacheKey, url, tempJobState);
+      } else {
+        throw err;
+      }
+    }
+
+    // Check newly downloaded local file
+    const downloadedFile = ytDlpService.findLocalFileByHash(cacheKey);
+    if (!downloadedFile) {
+      return res.status(502).json({
+        success: false,
+        error: "Failed to locate stored MP3 file after download execution"
+      });
+    }
+
+    const localDownloadUrl = `${protocol}://${host}/public/downloads/${downloadedFile.filename}`;
+    logger.info(`File successfully downloaded and cached to disk (${cacheKey}): ${downloadedFile.filename}`);
+
+    if (shouldRedirect) {
+      return res.redirect(302, localDownloadUrl);
+    }
+
+    return res.status(200).json({
+      success: true,
+      cached: false,
+      localFile: true,
+      downloadUrl: localDownloadUrl,
+      filename: downloadedFile.filename
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Simple GET controller to download media directly by YouTube Video ID.
+ * Usage: GET /dl/:id or GET /api/dl/:id
+ */
+async function downloadByVideoId(req, res, next) {
+  try {
+    const rawId = req.params.id;
+    if (!rawId) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required video ID parameter"
+      });
+    }
+
+    // Clean video ID (trim whitespace / query strings)
+    const videoId = rawId.trim().split("?")[0].split("&")[0];
+    const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const urlHash = generateSha256(targetUrl);
+
+    // 1. Zero-Quota Check: Check if local file exists by URL hash or Video ID
+    let localFile = ytDlpService.findLocalFileByHash(urlHash) || ytDlpService.findLocalFileByHash(videoId);
+    if (localFile && fs.existsSync(localFile.filePath)) {
+      logger.info(`Zero-Quota hit: Direct download file for Video ID ${videoId} (${localFile.filename})`);
+      return res.download(localFile.filePath, localFile.filename, (err) => {
+        if (err && !res.headersSent) next(err);
+      });
+    }
+
+    logger.info(`Local file miss for Video ID: ${videoId} (${urlHash}). Triggering background download...`);
+
+    const tempJobState = {
+      id: urlHash,
+      url: targetUrl,
+      format: "bestaudio/best",
+      status: "processing",
+      progress: 0,
+      speed: "0KiB/s",
+      eta: "00:00",
+      filename: null,
+      filePath: null,
+      error: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    try {
+      // Try yt-dlp first (saves RapidAPI quota!)
+      await ytDlpService._spawnDownload(urlHash, targetUrl, "bestaudio/best");
+    } catch (err) {
+      if (rapidApiService.isYouTubeUrl(targetUrl) && config.enableRapidApiFallback) {
+        logger.warn(`yt-dlp download failed/timed out for Video ID ${videoId}. Triggering RapidAPI fallback...`);
+        await rapidApiService.downloadFile(urlHash, targetUrl, tempJobState);
+      } else {
+        throw err;
+      }
+    }
+
+    // Retrieve newly created local file
+    const downloadedFile = ytDlpService.findLocalFileByHash(urlHash) || ytDlpService.findLocalFileByHash(videoId);
+    if (downloadedFile && fs.existsSync(downloadedFile.filePath)) {
+      logger.info(`Successfully downloaded file for Video ID ${videoId}, triggering attachment download: ${downloadedFile.filename}`);
+      return res.download(downloadedFile.filePath, downloadedFile.filename, (err) => {
+        if (err && !res.headersSent) next(err);
+      });
+    }
+
+    return res.status(502).json({
+      success: false,
+      error: `Failed to download or locate file for Video ID: ${videoId}`
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   analyze,
   download,
   getStatus,
   getFile,
-  updateYtDlp
+  updateYtDlp,
+  stream,
+  downloadByVideoId
 };
