@@ -13,6 +13,10 @@ src/logs/*.log
 src/public/downloads/*
 !src/public/downloads/.gitkeep
 
+# Runtime Data
+src/data/*.json
+!src/data/.gitkeep
+
 # System files
 .DS_Store
 Thumbs.db
