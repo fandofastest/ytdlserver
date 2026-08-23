@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Downloader Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-local: #10b981;
+      --accent-local-glow: rgba(16, 185, 129, 0.25);
+      --accent-ytdl: #3b82f6;
+      --accent-ytdl-glow: rgba(59, 130, 246, 0.25);
+      --accent-rapid: #a855f7;
+      --accent-rapid-glow: rgba(168, 85, 247, 0.25);
+      --accent-quota: #f59e0b;
+      --accent-quota-glow: rgba(245, 158, 11, 0.25);
+      --accent-latency: #06b6d4;
+      --accent-latency-glow: rgba(6, 182, 212, 0.25);
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(168, 85, 247, 0.12) 0px, transparent 50%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem 1.5rem;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .title-area h1 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #10b981, #3b82f6, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .title-area p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-top: 0.25rem;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .toggle-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      background: rgba(30, 41, 59, 0.5);
+      padding: 0.5rem 0.75rem;
+      border-radius: 9999px;
+      border: 1px solid var(--card-border);
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      appearance: none;
+      background: #334155;
+      outline: none;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .toggle-switch:checked {
+      background: var(--accent-local);
+    }
+
+    .toggle-switch::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      background: #fff;
+      transition: transform 0.3s;
+    }
+
+    .toggle-switch:checked::before {
+      transform: translateX(16px);
+    }
+
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: var(--danger);
+      color: white;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    }
+
+    /* Grid Layout */
+    .grid-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 1rem;
+      padding: 1.25rem 1.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .card-local::before { background: var(--accent-local); }
+    .card-local { box-shadow: 0 4px 20px -5px var(--accent-local-glow); }
+
+    .card-ytdl::before { background: var(--accent-ytdl); }
+    .card-ytdl { box-shadow: 0 4px 20px -5px var(--accent-ytdl-glow); }
+
+    .card-rapid::before { background: var(--accent-rapid); }
+    .card-rapid { box-shadow: 0 4px 20px -5px var(--accent-rapid-glow); }
+
+    .card-failed::before { background: var(--danger); }
+    .card-failed { box-shadow: 0 4px 20px -5px var(--danger-glow); }
+
+    .card-latency::before { background: var(--accent-latency); }
+    .card-latency { box-shadow: 0 4px 20px -5px var(--accent-latency-glow); }
+
+    .card-quota::before { background: var(--accent-quota); }
+    .card-quota { box-shadow: 0 4px 20px -5px var(--accent-quota-glow); }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .card-icon {
+      font-size: 1.2rem;
+    }
+
+    .card-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1;
+    }
+
+    .card-subtext {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+    }
+
+    /* Distribution Progress Bar */
+    .section-box {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .progress-stacked {
+      display: flex;
+      height: 12px;
+      border-radius: 9999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+      margin-bottom: 1rem;
+    }
+
+    .progress-bar-segment {
+      height: 100%;
+      transition: width 0.5s ease;
+    }
+
+    .segment-local { background: var(--accent-local); }
+    .segment-ytdl { background: var(--accent-ytdl); }
+    .segment-rapid { background: var(--accent-rapid); }
+    .segment-failed { background: var(--danger); }
+
+    .progress-legend {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* Table Styling */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+
+    th {
+      padding: 0.875rem 1rem;
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text-muted);
+      font-weight: 500;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-local {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-local);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-ytdl {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-ytdl);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .badge-rapidapi {
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--accent-rapid);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+
+    .badge-failed {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .time-col {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .latency-tag {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--accent-latency);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2.5rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="title-area">
+        <h1>📊 Analytics Dashboard</h1>
+        <p>Real-time Downloader Traffic, Response Time & RapidAPI Quota Savings</p>
+      </div>
+      <div class="actions">
+        <div class="toggle-group">
+          <span>Live Refresh</span>
+          <input type="checkbox" id="liveToggle" class="toggle-switch" checked>
+        </div>
+        <button class="btn btn-danger" onclick="resetStats()">Reset Stats</button>
+      </div>
+    </header>
+
+    <!-- Metrics Grid -->
+    <div class="grid-cards">
+      <div class="card card-local">
+        <div class="card-header">
+          <span class="card-title">Local Disk Hits</span>
+          <span class="card-icon">📁</span>
+        </div>
+        <div class="card-value" id="valLocal">0</div>
+        <div class="card-subtext">Zero-Quota Hits (<5ms response)</div>
+      </div>
+
+      <div class="card card-ytdl">
+        <div class="card-header">
+          <span class="card-title">yt-dlp Hits</span>
+          <span class="card-icon">⚡</span>
+        </div>
+        <div class="card-value" id="valYtdl">0</div>
+        <div class="card-subtext">Direct Binary Downloads</div>
+      </div>
+
+      <div class="card card-rapid">
+        <div class="card-header">
+          <span class="card-title">RapidAPI Hits</span>
+          <span class="card-icon">🚀</span>
+        </div>
+        <div class="card-value" id="valRapid">0</div>
+        <div class="card-subtext">Secondary Fallbacks Used</div>
+      </div>
+
+      <div class="card card-failed">
+        <div class="card-header">
+          <span class="card-title">Failed Requests</span>
+          <span class="card-icon">⚠️</span>
+        </div>
+        <div class="card-value" id="valFailed" style="color: var(--danger);">0</div>
+        <div class="card-subtext">Errors / Timeouts / Invalid URLs</div>
+      </div>
+
+      <div class="card card-latency">
+        <div class="card-header">
+          <span class="card-title">Avg Latency</span>
+          <span class="card-icon">⏱️</span>
+        </div>
+        <div class="card-value" id="valAvgLatency">0ms</div>
+        <div class="card-subtext">Average Response Time</div>
+      </div>
+
+      <div class="card card-quota">
+        <div class="card-header">
+          <span class="card-title">Quota Saved</span>
+          <span class="card-icon">💰</span>
+        </div>
+        <div class="card-value" id="valQuota">0</div>
+        <div class="card-subtext">RapidAPI Requests Saved</div>
+      </div>
+    </div>
+
+    <!-- Distribution Ratio Box -->
+    <div class="section-box">
+      <div class="section-title">
+        <span>Hit Distribution Ratio</span>
+        <span id="totalReqText" style="font-size: 0.9rem; color: var(--text-muted);">Total: 0</span>
+      </div>
+      <div class="progress-stacked">
+        <div class="progress-bar-segment segment-local" id="barLocal" style="width: 0%;"></div>
+        <div class="progress-bar-segment segment-ytdl" id="barYtdl" style="width: 0%;"></div>
+        <div class="progress-bar-segment segment-rapid" id="barRapid" style="width: 0%;"></div>
+        <div class="progress-bar-segment segment-failed" id="barFailed" style="width: 0%;"></div>
+      </div>
+      <div class="progress-legend">
+        <div class="legend-item">
+          <div class="legend-dot segment-local"></div>
+          <span>Local Cache (<span id="pctLocal">0</span>%)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot segment-ytdl"></div>
+          <span>yt-dlp (<span id="pctYtdl">0</span>%)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot segment-rapid"></div>
+          <span>RapidAPI (<span id="pctRapid">0</span>%)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot segment-failed"></div>
+          <span>Failed (<span id="pctFailed">0</span>%)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent History Table -->
+    <div class="section-box">
+      <div class="section-title">
+        <span>Recent Activity History</span>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Last 50 requests</span>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Status / Provider</th>
+              <th>Target URL / Video ID</th>
+              <th>Response Time</th>
+              <th>Filename / Details</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <tr>
+              <td colspan="5" class="empty-state">Loading activity data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let timer = null;
+
+    async function fetchStats() {
+      try {
+        const resp = await fetch('/api/admin/stats');
+        const json = await resp.json();
+        if (json.success && json.data) {
+          renderStats(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch stats:", err);
+      }
+    }
+
+    function formatLatency(ms) {
+      if (!ms || ms <= 0) return '< 1ms';
+      if (ms < 1000) return `${ms}ms`;
+      return `${(ms / 1000).toFixed(2)}s`;
+    }
+
+    function renderStats(data) {
+      const local = data.localHits || 0;
+      const ytdl = data.ytdlHits || 0;
+      const rapid = data.rapidHits || 0;
+      const failed = data.failedHits || 0;
+      const total = data.totalRequests || (local + ytdl + rapid + failed);
+      const quota = data.rapidQuotaSaved || (local + ytdl);
+      const avgLatency = data.avgResponseTimeMs || 0;
+
+      document.getElementById('valLocal').innerText = local.toLocaleString();
+      document.getElementById('valYtdl').innerText = ytdl.toLocaleString();
+      document.getElementById('valRapid').innerText = rapid.toLocaleString();
+      document.getElementById('valFailed').innerText = failed.toLocaleString();
+      document.getElementById('valQuota').innerText = quota.toLocaleString();
+      document.getElementById('valAvgLatency').innerText = formatLatency(avgLatency);
+      document.getElementById('totalReqText').innerText = `Total: ${total.toLocaleString()} Requests`;
+
+      // Calculate percentages
+      const pctLocal = total > 0 ? ((local / total) * 100).toFixed(1) : 0;
+      const pctYtdl = total > 0 ? ((ytdl / total) * 100).toFixed(1) : 0;
+      const pctRapid = total > 0 ? ((rapid / total) * 100).toFixed(1) : 0;
+      const pctFailed = total > 0 ? ((failed / total) * 100).toFixed(1) : 0;
+
+      document.getElementById('barLocal').style.width = pctLocal + '%';
+      document.getElementById('barYtdl').style.width = pctYtdl + '%';
+      document.getElementById('barRapid').style.width = pctRapid + '%';
+      document.getElementById('barFailed').style.width = pctFailed + '%';
+
+      document.getElementById('pctLocal').innerText = pctLocal;
+      document.getElementById('pctYtdl').innerText = pctYtdl;
+      document.getElementById('pctRapid').innerText = pctRapid;
+      document.getElementById('pctFailed').innerText = pctFailed;
+
+      // Render table history
+      const tbody = document.getElementById('historyTableBody');
+      const history = data.history || [];
+
+      if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No download activity recorded yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = history.map(item => {
+        const isFailed = item.provider === 'failed' || Boolean(item.error);
+        const badgeClass = isFailed ? 'badge-failed' : (item.provider === 'local' ? 'badge-local' : (item.provider === 'ytdl' ? 'badge-ytdl' : 'badge-rapidapi'));
+        const providerText = isFailed ? 'FAILED' : item.provider;
+        const timeStr = new Date(item.timestamp).toLocaleString();
+        const displayUrl = item.url || item.id || 'N/A';
+        const displayDetail = item.error ? `<span style="color: var(--danger);">${escapeHtml(item.error)}</span>` : (item.filename || 'N/A');
+        const latencyText = formatLatency(item.durationMs);
+
+        return `
+          <tr>
+            <td class="time-col">${timeStr}</td>
+            <td><span class="badge ${badgeClass}">${providerText}</span></td>
+            <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(displayUrl)}</td>
+            <td><span class="latency-tag">${latencyText}</span></td>
+            <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayDetail}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    async function resetStats() {
+      if (!confirm("Are you sure you want to reset all analytics statistics?")) return;
+      try {
+        const resp = await fetch('/api/admin/reset', { method: 'POST' });
+        const json = await resp.json();
+        if (json.success) {
+          fetchStats();
+        }
+      } catch (err) {
+        alert("Failed to reset stats: " + err.message);
+      }
+    }
+
+    function setupPolling() {
+      const toggle = document.getElementById('liveToggle');
+      if (toggle.checked) {
+        if (!timer) {
+          timer = setInterval(fetchStats, 3000);
+        }
+      } else {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }
+    }
+
+    document.getElementById('liveToggle').addEventListener('change', setupPolling);
+
+    // Initial load
+    fetchStats();
+    setupPolling();
+  </script>
+</body>
+</html>

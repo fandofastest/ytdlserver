@@ -6,6 +6,7 @@ const { generateSha256 } = require("../utils/hash.util");
 const cacheService = require("../cache/cache.service");
 const ytDlpService = require("../services/ytdlp.service");
 const rapidApiService = require("../services/rapidapi.service");
+const statsService = require("../services/stats.service");
 const logger = require("../utils/logger.util");
 
 /**
@@ -64,6 +65,7 @@ async function download(req, res, next) {
     const existingFile = ytDlpService.findLocalFileByHash(downloadId);
     if (existingFile) {
       logger.info(`Zero-Quota hit on download request for hash ${downloadId}: ${existingFile.filename}`);
+      statsService.recordHit("local", { url, filename: existingFile.filename, id: downloadId });
       return res.status(200).json({
         success: true,
         cached: true,
@@ -218,11 +220,14 @@ async function updateYtDlp(req, res, next) {
  * GET /api/stream?url=YOUTUBE_URL&redirect=true|false
  */
 async function stream(req, res, next) {
+  const startTime = Date.now();
   try {
     const url = req.query.url;
     const shouldRedirect = req.query.redirect !== "false";
 
     if (!url) {
+      const durationMs = Date.now() - startTime;
+      statsService.recordFailure({ url: "", durationMs, error: "Missing required query parameter: url" });
       return res.status(400).json({
         success: false,
         error: "Missing required query parameter: url"
@@ -237,6 +242,9 @@ async function stream(req, res, next) {
     const existingFile = ytDlpService.findLocalFileByHash(cacheKey);
     if (existingFile) {
       logger.info(`Zero-Quota Hit: Serving local cached MP3 file for URL hash (${cacheKey}): ${existingFile.filename}`);
+      const durationMs = Date.now() - startTime;
+      statsService.recordHit("local", { url, filename: existingFile.filename, id: cacheKey, durationMs });
+
       const localDownloadUrl = `${protocol}://${host}/public/downloads/${existingFile.filename}`;
       if (shouldRedirect) {
         return res.redirect(302, localDownloadUrl);
@@ -268,6 +276,7 @@ async function stream(req, res, next) {
       updatedAt: Date.now()
     };
 
+    let usedProvider = "ytdl";
     try {
       // Try yt-dlp first (saves RapidAPI quota!)
       await ytDlpService._spawnDownload(cacheKey, url, "bestaudio/best");
@@ -275,6 +284,7 @@ async function stream(req, res, next) {
       // If yt-dlp fails/times out and RapidAPI is available for YouTube, fallback to RapidAPI
       if (rapidApiService.isYouTubeUrl(url) && config.enableRapidApiFallback) {
         logger.warn(`yt-dlp download failed/timed out in stream controller for ${url}. Triggering RapidAPI download fallback...`);
+        usedProvider = "rapidapi";
         await rapidApiService.downloadFile(cacheKey, url, tempJobState);
       } else {
         throw err;
@@ -284,12 +294,16 @@ async function stream(req, res, next) {
     // Check newly downloaded local file
     const downloadedFile = ytDlpService.findLocalFileByHash(cacheKey);
     if (!downloadedFile) {
+      const durationMs = Date.now() - startTime;
+      statsService.recordFailure({ url, durationMs, error: "Failed to locate stored MP3 file after download execution" });
       return res.status(502).json({
         success: false,
         error: "Failed to locate stored MP3 file after download execution"
       });
     }
 
+    const durationMs = Date.now() - startTime;
+    statsService.recordHit(usedProvider, { url, filename: downloadedFile.filename, id: cacheKey, durationMs });
     const localDownloadUrl = `${protocol}://${host}/public/downloads/${downloadedFile.filename}`;
     logger.info(`File successfully downloaded and cached to disk (${cacheKey}): ${downloadedFile.filename}`);
 
@@ -305,6 +319,8 @@ async function stream(req, res, next) {
       filename: downloadedFile.filename
     });
   } catch (err) {
+    const durationMs = Date.now() - startTime;
+    statsService.recordFailure({ url: req.query ? req.query.url : "", durationMs, error: err.message });
     next(err);
   }
 }
@@ -314,9 +330,12 @@ async function stream(req, res, next) {
  * Usage: GET /dl/:id or GET /api/dl/:id
  */
 async function downloadByVideoId(req, res, next) {
+  const startTime = Date.now();
   try {
     const rawId = req.params.id;
     if (!rawId) {
+      const durationMs = Date.now() - startTime;
+      statsService.recordFailure({ videoId: "", durationMs, error: "Missing required video ID parameter" });
       return res.status(400).json({
         success: false,
         error: "Missing required video ID parameter"
@@ -332,6 +351,8 @@ async function downloadByVideoId(req, res, next) {
     let localFile = ytDlpService.findLocalFileByHash(urlHash) || ytDlpService.findLocalFileByHash(videoId);
     if (localFile && fs.existsSync(localFile.filePath)) {
       logger.info(`Zero-Quota hit: Direct download file for Video ID ${videoId} (${localFile.filename})`);
+      const durationMs = Date.now() - startTime;
+      statsService.recordHit("local", { url: targetUrl, videoId, filename: localFile.filename, durationMs });
       return res.download(localFile.filePath, localFile.filename, (err) => {
         if (err && !res.headersSent) next(err);
       });
@@ -354,12 +375,14 @@ async function downloadByVideoId(req, res, next) {
       updatedAt: Date.now()
     };
 
+    let usedProvider = "ytdl";
     try {
       // Try yt-dlp first (saves RapidAPI quota!)
       await ytDlpService._spawnDownload(urlHash, targetUrl, "bestaudio/best");
     } catch (err) {
       if (rapidApiService.isYouTubeUrl(targetUrl) && config.enableRapidApiFallback) {
         logger.warn(`yt-dlp download failed/timed out for Video ID ${videoId}. Triggering RapidAPI fallback...`);
+        usedProvider = "rapidapi";
         await rapidApiService.downloadFile(urlHash, targetUrl, tempJobState);
       } else {
         throw err;
@@ -370,16 +393,22 @@ async function downloadByVideoId(req, res, next) {
     const downloadedFile = ytDlpService.findLocalFileByHash(urlHash) || ytDlpService.findLocalFileByHash(videoId);
     if (downloadedFile && fs.existsSync(downloadedFile.filePath)) {
       logger.info(`Successfully downloaded file for Video ID ${videoId}, triggering attachment download: ${downloadedFile.filename}`);
+      const durationMs = Date.now() - startTime;
+      statsService.recordHit(usedProvider, { url: targetUrl, videoId, filename: downloadedFile.filename, durationMs });
       return res.download(downloadedFile.filePath, downloadedFile.filename, (err) => {
         if (err && !res.headersSent) next(err);
       });
     }
 
+    const durationMs = Date.now() - startTime;
+    statsService.recordFailure({ videoId, durationMs, error: `Failed to download or locate file for Video ID: ${videoId}` });
     return res.status(502).json({
       success: false,
       error: `Failed to download or locate file for Video ID: ${videoId}`
     });
   } catch (err) {
+    const durationMs = Date.now() - startTime;
+    statsService.recordFailure({ videoId: req.params ? req.params.id : "", durationMs, error: err.message });
     next(err);
   }
 }
