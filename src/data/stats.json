@@ -8,6 +8,7 @@
   "avgResponseTimeMs": 0,
   "totalResponseTimeMs": 0,
   "createdAt": 1787499749293,
-  "updatedAt": 1787499749293,
+  "updatedAt": 1787501284574,
+  "whitelistIps": [],
   "history": []
 }

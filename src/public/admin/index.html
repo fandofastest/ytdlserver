@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard - Downloader Analytics</title>
+  <title>Admin Dashboard - Downloader Analytics & IP Whitelist</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -140,6 +140,24 @@
       gap: 0.5rem;
     }
 
+    .btn-primary {
+      background: var(--accent-ytdl);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 15px var(--accent-ytdl-glow);
+    }
+
+    .btn-success {
+      background: var(--accent-local);
+      color: white;
+    }
+
+    .btn-success:hover {
+      box-shadow: 0 0 15px var(--accent-local-glow);
+    }
+
     .btn-danger {
       background: rgba(239, 68, 68, 0.15);
       color: var(--danger);
@@ -150,6 +168,11 @@
       background: var(--danger);
       color: white;
       box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    }
+
+    .btn-sm {
+      padding: 0.35rem 0.75rem;
+      font-size: 0.775rem;
     }
 
     /* Grid Layout */
@@ -251,6 +274,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
 
     .progress-stacked {
@@ -289,6 +314,60 @@
       width: 10px;
       height: 10px;
       border-radius: 50%;
+    }
+
+    /* Whitelist Form & List */
+    .whitelist-control {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .ip-input {
+      flex: 1;
+      min-width: 240px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 0.5rem;
+      padding: 0.6rem 1rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.875rem;
+      outline: none;
+    }
+
+    .ip-input:focus {
+      border-color: var(--accent-ytdl);
+    }
+
+    .ip-tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .ip-tag {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid var(--card-border);
+      padding: 0.4rem 0.8rem;
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
+      font-family: monospace;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .ip-tag-remove {
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: color 0.2s;
+      font-weight: bold;
+    }
+
+    .ip-tag-remove:hover {
+      color: var(--danger);
     }
 
     /* Table Styling */
@@ -378,7 +457,7 @@
     <header>
       <div class="title-area">
         <h1>📊 Analytics Dashboard</h1>
-        <p>Real-time Downloader Traffic, Response Time & RapidAPI Quota Savings</p>
+        <p>Real-time Downloader Traffic, Response Time & IP Whitelist Settings</p>
       </div>
       <div class="actions">
         <div class="toggle-group">
@@ -478,6 +557,24 @@
       </div>
     </div>
 
+    <!-- IP Whitelist Settings Box -->
+    <div class="section-box">
+      <div class="section-title">
+        <span>🛡️ IP Whitelist Management (Bypass Rate Limiter)</span>
+        <span id="myIpText" style="font-size: 0.85rem; color: var(--accent-local); font-family: monospace;">Your IP: Loading...</span>
+      </div>
+
+      <div class="whitelist-control">
+        <input type="text" id="customIpInput" class="ip-input" placeholder="Enter IP address (e.g. 123.45.67.89)">
+        <button class="btn btn-primary" onclick="addCustomIp()">Add Custom IP</button>
+        <button class="btn btn-success" onclick="whitelistMyIp()">⚡ Whitelist My Current IP</button>
+      </div>
+
+      <div id="whitelistTags" class="ip-tag-list">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Loading whitelist data...</span>
+      </div>
+    </div>
+
     <!-- Recent History Table -->
     <div class="section-box">
       <div class="section-title">
@@ -507,6 +604,7 @@
 
   <script>
     let timer = null;
+    let currentClientIp = '';
 
     async function fetchStats() {
       try {
@@ -517,6 +615,95 @@
         }
       } catch (err) {
         console.error("Failed to fetch stats:", err);
+      }
+    }
+
+    async function fetchWhitelist() {
+      try {
+        const resp = await fetch('/api/admin/whitelist');
+        const json = await resp.json();
+        if (json.success) {
+          currentClientIp = json.clientIp || '';
+          document.getElementById('myIpText').innerText = `Your IP: ${currentClientIp || 'Unknown'}`;
+          renderWhitelist(json.whitelist || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch whitelist:", err);
+      }
+    }
+
+    function renderWhitelist(ips) {
+      const container = document.getElementById('whitelistTags');
+      if (!ips || ips.length === 0) {
+        container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No whitelisted IPs configured yet.</span>';
+        return;
+      }
+
+      container.innerHTML = ips.map(ip => {
+        const isCurrent = ip === currentClientIp || ip === `::ffff:${currentClientIp}`;
+        return `
+          <div class="ip-tag">
+            <span>${escapeHtml(ip)} ${isCurrent ? '<strong style="color: var(--accent-local);">(You)</strong>' : ''}</span>
+            <span class="ip-tag-remove" onclick="removeIp('${escapeHtml(ip)}')" title="Remove IP">&times;</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function whitelistMyIp() {
+      if (!currentClientIp) {
+        alert("Could not detect your current IP address.");
+        return;
+      }
+      await addIp(currentClientIp);
+    }
+
+    async function addCustomIp() {
+      const input = document.getElementById('customIpInput');
+      const val = (input.value || '').trim();
+      if (!val) {
+        alert("Please enter a valid IP address.");
+        return;
+      }
+      await addIp(val);
+      input.value = '';
+    }
+
+    async function addIp(ipStr) {
+      try {
+        const resp = await fetch('/api/admin/whitelist/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip: ipStr })
+        });
+        const json = await resp.json();
+        if (json.success) {
+          renderWhitelist(json.whitelist || []);
+          alert(`IP '${ipStr}' successfully whitelisted! Rate limit bypassed.`);
+        } else {
+          alert("Error: " + (json.error || "Failed to whitelist IP"));
+        }
+      } catch (err) {
+        alert("Error adding IP to whitelist: " + err.message);
+      }
+    }
+
+    async function removeIp(ipStr) {
+      if (!confirm(`Are you sure you want to remove '${ipStr}' from IP whitelist?`)) return;
+      try {
+        const resp = await fetch('/api/admin/whitelist/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip: ipStr })
+        });
+        const json = await resp.json();
+        if (json.success) {
+          renderWhitelist(json.whitelist || []);
+        } else {
+          alert("Error: " + (json.error || "Failed to remove IP"));
+        }
+      } catch (err) {
+        alert("Error removing IP: " + err.message);
       }
     }
 
@@ -625,6 +812,7 @@
 
     // Initial load
     fetchStats();
+    fetchWhitelist();
     setupPolling();
   </script>
 </body>

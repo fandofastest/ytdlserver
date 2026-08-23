@@ -34,6 +34,7 @@ const config = {
   ytDlpFastTimeoutMs: parseInt(process.env.YTDLP_FAST_TIMEOUT_MS || "4000", 10),
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 mins
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
+  rateLimitWhitelistIps: (process.env.RATE_LIMIT_WHITELIST_IPS || "127.0.0.1,::1,::ffff:127.0.0.1").split(",").map((ip) => ip.trim()),
   cacheTtlSeconds: parseInt(process.env.CACHE_TTL_SECONDS || "2592000", 10), // 30 days default (2,592,000 seconds)
   cleanupIntervalMs: parseInt(process.env.CLEANUP_INTERVAL_MS || "300000", 10), // 5 minutes
   fileMaxAgeMs: parseInt(process.env.FILE_MAX_AGE_MS || "1800000", 10), // 30 minutes (Set to 0 to keep files permanently for max quota saving)

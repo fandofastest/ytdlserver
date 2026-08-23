@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const config = require("../config/app.config");
 const logger = require("../utils/logger.util");
 
 const dataDir = path.join(__dirname, "..", "data");
@@ -16,6 +17,7 @@ const defaultStats = {
   totalResponseTimeMs: 0,
   createdAt: Date.now(),
   updatedAt: Date.now(),
+  whitelistIps: [],
   history: []
 };
 
@@ -164,6 +166,84 @@ class StatsService {
   }
 
   /**
+   * Returns merged array of whitelisted IPs from config (.env) and persistent storage (stats.json).
+   * 
+   * @returns {Array<string>} Array of whitelisted IP strings.
+   */
+  getWhitelistIps() {
+    const stats = this.getStats();
+    const envIps = config.rateLimitWhitelistIps || [];
+    const storedIps = Array.isArray(stats.whitelistIps) ? stats.whitelistIps : [];
+
+    return Array.from(new Set([...envIps, ...storedIps])).filter(Boolean);
+  }
+
+  /**
+   * Adds an IP address to dynamic whitelist storage.
+   * 
+   * @param {string} ip - IP address string.
+   * @returns {Array<string>} Updated whitelist IPs array.
+   */
+  addWhitelistIp(ip) {
+    if (!ip) return this.getWhitelistIps();
+    const cleanIp = String(ip).trim();
+    const stats = this.getStats();
+
+    if (!Array.isArray(stats.whitelistIps)) {
+      stats.whitelistIps = [];
+    }
+
+    if (!stats.whitelistIps.includes(cleanIp)) {
+      stats.whitelistIps.push(cleanIp);
+      stats.updatedAt = Date.now();
+      fs.writeFileSync(statsFilePath, JSON.stringify(stats, null, 2), "utf8");
+      logger.info(`Added IP to Whitelist: ${cleanIp}`);
+    }
+
+    return this.getWhitelistIps();
+  }
+
+  /**
+   * Removes an IP address from dynamic whitelist storage.
+   * 
+   * @param {string} ip - IP address string.
+   * @returns {Array<string>} Updated whitelist IPs array.
+   */
+  removeWhitelistIp(ip) {
+    if (!ip) return this.getWhitelistIps();
+    const cleanIp = String(ip).trim();
+    const stats = this.getStats();
+
+    if (Array.isArray(stats.whitelistIps)) {
+      stats.whitelistIps = stats.whitelistIps.filter((item) => item !== cleanIp && item !== `::ffff:${cleanIp}`);
+      stats.updatedAt = Date.now();
+      fs.writeFileSync(statsFilePath, JSON.stringify(stats, null, 2), "utf8");
+      logger.info(`Removed IP from Whitelist: ${cleanIp}`);
+    }
+
+    return this.getWhitelistIps();
+  }
+
+  /**
+   * Checks if an IP address matches any whitelisted IP.
+   * 
+   * @param {string} ip - Client IP address.
+   * @returns {boolean} True if IP is whitelisted.
+   */
+  isIpWhitelisted(ip) {
+    if (!ip) return false;
+    const cleanIp = String(ip).trim();
+    const rawIpWithoutV6Prefix = cleanIp.replace(/^::ffff:/, "");
+
+    const allWhitelisted = this.getWhitelistIps();
+
+    return allWhitelisted.some((item) => {
+      const cleanWhitelisted = item.replace(/^::ffff:/, "");
+      return cleanWhitelisted === cleanIp || cleanWhitelisted === rawIpWithoutV6Prefix || item === cleanIp;
+    });
+  }
+
+  /**
    * Resets all statistics counters back to zero.
    * 
    * @returns {Object} Clean stats object.
@@ -174,6 +254,7 @@ class StatsService {
         ...defaultStats,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        whitelistIps: this.getStats().whitelistIps || [],
         history: []
       };
       fs.writeFileSync(statsFilePath, JSON.stringify(clean, null, 2), "utf8");
