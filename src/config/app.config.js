@@ -21,7 +21,7 @@ const config = {
   nodeEnv: process.env.NODE_ENV || "production",
   ytDlpPath: resolveHomePath(process.env.YTDLP_PATH || "~/bin/yt-dlp"),
   cookiesPath: resolveHomePath(process.env.YTDLP_COOKIES_PATH || "~/cookies.txt"),
-  proxyUrl: process.env.YTDLP_PROXY || null,
+  proxyUrl: process.env.YTDLP_PROXY || "http://proxyuser:Palang66@168.138.163.64:3128",
   impersonate: process.env.YTDLP_IMPERSONATE && process.env.YTDLP_IMPERSONATE !== "none" ? process.env.YTDLP_IMPERSONATE : null,
   userAgent: process.env.YTDLP_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   extractorArgs: process.env.YTDLP_EXTRACTOR_ARGS || null,
