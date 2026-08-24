@@ -33,10 +33,11 @@ function getAvailableCookiePaths() {
   if (config.cookiesPath) candidates.push(config.cookiesPath);
 
   const baseDir = config.cookiesPath ? path.dirname(config.cookiesPath) : os.homedir();
-  candidates.push(path.join(baseDir, "cookies2.txt"));
-  candidates.push(path.join(baseDir, "cookies.txt"));
-  candidates.push("/home/fandofast/cookies2.txt");
-  candidates.push("/home/fandofast/cookies.txt");
+  for (let i = 1; i <= 10; i++) {
+    const filename = i === 1 ? "cookies.txt" : `cookies${i}.txt`;
+    candidates.push(path.join(baseDir, filename));
+    candidates.push(`/home/fandofast/${filename}`);
+  }
 
   return Array.from(new Set(candidates)).filter((p) => p && fs.existsSync(p));
 }
@@ -53,7 +54,9 @@ function getCommonArgs(options = {}) {
   const args = [
     "--no-playlist",
     "--js-runtimes",
-    "node"
+    "node",
+    "--sleep-requests",
+    "1.5"
   ];
 
   if (config.userAgent) {
