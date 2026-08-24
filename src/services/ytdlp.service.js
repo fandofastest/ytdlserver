@@ -187,16 +187,13 @@ class YtDlpService {
             return this._spawnAnalyze(url, { ...options, disableImpersonate: true }).then(resolve).catch(reject);
           }
 
-          // If cookie rate limit or bot check occurred, try fallback cookie if available
-          const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable/i.test(stderrData);
-          if (isCookieOrRateLimitError) {
-            if (cookieIndex + 1 < availableCookies.length) {
-              logger.warn(`yt-dlp analyze hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
-              return this._spawnAnalyze(url, { ...options, cookieIndex: cookieIndex + 1 }).then(resolve).catch(reject);
-            } else if (!options.useProxy && config.proxyUrl) {
-              logger.warn(`yt-dlp analyze hit IP rate-limit on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
-              return this._spawnAnalyze(url, { ...options, cookieIndex: 0, useProxy: true }).then(resolve).catch(reject);
-            }
+          // Try fallback cookie first if available
+          if (cookieIndex + 1 < availableCookies.length) {
+            logger.warn(`yt-dlp analyze exited with code ${code}. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
+            return this._spawnAnalyze(url, { ...options, cookieIndex: cookieIndex + 1 }).then(resolve).catch(reject);
+          } else if (!options.useProxy && config.proxyUrl) {
+            logger.warn(`yt-dlp analyze exited with code ${code} on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
+            return this._spawnAnalyze(url, { ...options, cookieIndex: 0, useProxy: true }).then(resolve).catch(reject);
           }
 
           if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
@@ -395,16 +392,13 @@ class YtDlpService {
             return this._spawnDownload(downloadId, url, format, true, cookieIndex, useProxy).then(resolve).catch(reject);
           }
 
-          // If cookie rate limit, bot check, or 403 Forbidden occurred, try fallback cookie or proxy if available
-          const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable|Forbidden|403/i.test(stderrData);
-          if (isCookieOrRateLimitError) {
-            if (cookieIndex + 1 < availableCookies.length) {
-              logger.warn(`Download process ${downloadId} hit rate-limit/403. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
-              return this._spawnDownload(downloadId, url, format, disableImpersonate, cookieIndex + 1, useProxy).then(resolve).catch(reject);
-            } else if (!useProxy && config.proxyUrl) {
-              logger.warn(`Download process ${downloadId} hit rate-limit/403 on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
-              return this._spawnDownload(downloadId, url, format, disableImpersonate, 0, true).then(resolve).catch(reject);
-            }
+          // Try fallback cookie first if available
+          if (cookieIndex + 1 < availableCookies.length) {
+            logger.warn(`Download process ${downloadId} exited with code ${code}. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
+            return this._spawnDownload(downloadId, url, format, disableImpersonate, cookieIndex + 1, useProxy).then(resolve).catch(reject);
+          } else if (!useProxy && config.proxyUrl) {
+            logger.warn(`Download process ${downloadId} exited with code ${code} on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
+            return this._spawnDownload(downloadId, url, format, disableImpersonate, 0, true).then(resolve).catch(reject);
           }
 
           if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
