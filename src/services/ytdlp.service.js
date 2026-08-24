@@ -1,12 +1,17 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const config = require("../config/app.config");
 const logger = require("../utils/logger.util");
 const { parseAndSimplifyYtDlpJson } = require("../utils/ytdlp.util");
 const queueService = require("./queue.service");
 const rapidApiService = require("./rapidapi.service");
 const statsService = require("./stats.service");
+
+function generateSha256(text) {
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
 
 // In-memory status map for tracking active and completed download jobs
 const downloadJobsMap = new Map();
