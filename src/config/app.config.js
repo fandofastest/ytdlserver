@@ -26,7 +26,7 @@ const config = {
   userAgent: process.env.YTDLP_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   extractorArgs: process.env.YTDLP_EXTRACTOR_ARGS || null,
   autoUpdateYtDlp: process.env.YTDLP_AUTO_UPDATE !== "false",
-  rapidApiKey: process.env.RAPIDAPI_KEY || "0a8f2909afmshd5913885ff5f415p13ad13jsn8f5b5c528145",
+  rapidApiKey: process.env.RAPIDAPI_KEY || "ebc2265decmshb2099ea7fde3d31p123991jsn838cf9cada3f",
   rapidApiHost: process.env.RAPIDAPI_HOST || "youtube-mp36.p.rapidapi.com",
   enableRapidApiFallback: process.env.RAPIDAPI_FALLBACK_ENABLED !== "false",
   maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES || "2", 10),
