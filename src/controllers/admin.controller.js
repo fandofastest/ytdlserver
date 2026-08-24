@@ -1,5 +1,6 @@
 const path = require("path");
 const statsService = require("../services/stats.service");
+const ytDlpService = require("../services/ytdlp.service");
 const logger = require("../utils/logger.util");
 
 /**
