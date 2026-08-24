@@ -642,6 +642,23 @@
       </div>
     </div>
 
+    <!-- Direct Stream Redirect Mode Box -->
+    <div class="section-box">
+      <div class="section-title">
+        <span>⚡ High-Speed Direct Stream Redirect Mode</span>
+        <span id="directModeStatusText" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Disabled (Local File Mode)</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        When enabled, requests to <code>/dl/:id</code> and <code>/stream</code> redirect directly to YouTube's CDN stream link in <strong>~1.5 seconds</strong> (cached in <strong>&lt;1ms</strong>) instead of downloading full MP3 files to local disk.
+      </p>
+      <div class="whitelist-control">
+        <label class="toggle-group" style="cursor: pointer;">
+          <span>Enable Direct Stream Redirect Mode</span>
+          <input type="checkbox" id="directModeToggle" class="toggle-switch" onchange="toggleDirectMode(this.checked)">
+        </label>
+      </div>
+    </div>
+
     <!-- Fallback Proxy Box -->
     <div class="section-box">
       <div class="section-title">
@@ -875,18 +892,50 @@
       }
     }
 
-    async function fetchProxy() {
+    async function fetchSettings() {
       try {
-        const resp = await adminFetch('/api/admin/proxy');
+        const resp = await adminFetch('/api/admin/settings');
         const json = await resp.json();
         if (json.success) {
+          const isDirect = Boolean(json.directStreamRedirect);
+          document.getElementById('directModeToggle').checked = isDirect;
+          updateDirectModeUI(isDirect);
+
           const proxyInput = document.getElementById('proxyUrlInput');
           proxyInput.value = json.proxyUrl || '';
           document.getElementById('proxyStatusText').innerText = json.proxyUrl ? 'Active' : 'Disabled';
           document.getElementById('proxyStatusText').style.color = json.proxyUrl ? 'var(--accent-local)' : 'var(--text-muted)';
         }
       } catch (err) {
-        if (err.message !== 'Unauthorized') console.error("Failed to fetch proxy:", err);
+        if (err.message !== 'Unauthorized') console.error("Failed to fetch settings:", err);
+      }
+    }
+
+    function updateDirectModeUI(isDirect) {
+      const statusText = document.getElementById('directModeStatusText');
+      statusText.innerText = isDirect ? 'Enabled (⚡ High-Speed Direct Redirect)' : 'Disabled (🛡️ Local Disk File Mode)';
+      statusText.style.color = isDirect ? 'var(--accent-local)' : 'var(--text-muted)';
+    }
+
+    async function toggleDirectMode(enabled) {
+      try {
+        const resp = await adminFetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ directStreamRedirect: Boolean(enabled) })
+        });
+        const json = await resp.json();
+        if (json.success) {
+          updateDirectModeUI(json.directStreamRedirect);
+        } else {
+          alert("Failed to update setting: " + (json.error || "Unknown error"));
+          document.getElementById('directModeToggle').checked = !enabled;
+        }
+      } catch (err) {
+        if (err.message !== 'Unauthorized') {
+          alert("Error updating mode: " + err.message);
+          document.getElementById('directModeToggle').checked = !enabled;
+        }
       }
     }
 
@@ -1090,7 +1139,7 @@
     fetchStats();
     fetchWhitelist();
     fetchCookies();
-    fetchProxy();
+    fetchSettings();
     setupPolling();
   </script>
 </body>

@@ -26,4 +26,8 @@ router.post("/api/admin/cookies/delete", verifyAdminPassword, adminController.de
 router.get("/api/admin/proxy", verifyAdminPassword, adminController.getProxy);
 router.post("/api/admin/proxy", verifyAdminPassword, adminController.updateProxy);
 
+// Settings Routes (Direct Stream Redirect Mode Toggle)
+router.get("/api/admin/settings", verifyAdminPassword, adminController.getSettings);
+router.post("/api/admin/settings", verifyAdminPassword, adminController.updateSettings);
+
 module.exports = router;

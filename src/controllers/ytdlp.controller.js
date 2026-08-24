@@ -238,6 +238,32 @@ async function stream(req, res, next) {
     const protocol = req.protocol;
     const cacheKey = generateSha256(url);
 
+    const isDirectRedirectMode = config.directStreamRedirect || req.query.mode === "direct";
+
+    if (isDirectRedirectMode) {
+      logger.info(`Direct Stream Redirect Mode active for URL: ${url}`);
+      const directInfo = await ytDlpService.getDirectStreamUrl(url);
+      const durationMs = Date.now() - startTime;
+      statsService.recordHit(directInfo.fromCache ? "local" : "ytdl", {
+        url,
+        filename: `${directInfo.title || cacheKey}.mp3`,
+        id: cacheKey,
+        durationMs
+      });
+
+      if (shouldRedirect) {
+        return res.redirect(302, directInfo.streamUrl);
+      }
+      return res.status(200).json({
+        success: true,
+        mode: "direct_stream_redirect",
+        cached: directInfo.fromCache,
+        streamUrl: directInfo.streamUrl,
+        title: directInfo.title,
+        duration: directInfo.duration
+      });
+    }
+
     // 1. Zero-Quota Check: Check if local file already exists on disk
     const existingFile = ytDlpService.findLocalFileByHash(cacheKey);
     if (existingFile) {
@@ -346,6 +372,22 @@ async function downloadByVideoId(req, res, next) {
     const videoId = rawId.trim().split("?")[0].split("&")[0];
     const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const urlHash = generateSha256(targetUrl);
+
+    const isDirectRedirectMode = config.directStreamRedirect || (req.query && req.query.mode === "direct");
+
+    if (isDirectRedirectMode) {
+      logger.info(`Direct Stream Redirect Mode active for Video ID: ${videoId}`);
+      const directInfo = await ytDlpService.getDirectStreamUrl(targetUrl);
+      const durationMs = Date.now() - startTime;
+      statsService.recordHit(directInfo.fromCache ? "local" : "ytdl", {
+        url: targetUrl,
+        videoId,
+        filename: `${directInfo.title || videoId}.mp3`,
+        durationMs
+      });
+
+      return res.redirect(302, directInfo.streamUrl);
+    }
 
     // 1. Zero-Quota Check: Check if local file exists by URL hash or Video ID
     let localFile = ytDlpService.findLocalFileByHash(urlHash) || ytDlpService.findLocalFileByHash(videoId);

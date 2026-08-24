@@ -11,6 +11,9 @@ const statsService = require("./stats.service");
 // In-memory status map for tracking active and completed download jobs
 const downloadJobsMap = new Map();
 
+// In-memory cache for high-speed direct stream URLs
+const directStreamCache = new Map();
+
 /**
  * Resolves the binary path to use for spawning yt-dlp processes.
  * Checks configured path (~/bin/yt-dlp), falls back to system PATH if missing.
@@ -220,6 +223,55 @@ class YtDlpService {
         }
       });
     });
+  }
+
+  /**
+   * High-speed direct stream URL extraction with in-memory TTL caching.
+   * @param {string} url - YouTube URL.
+   * @returns {Promise<Object>} Stream URL info { streamUrl, title, duration, fromCache }
+   */
+  async getDirectStreamUrl(url) {
+    const cacheKey = generateSha256(url);
+    const cached = directStreamCache.get(cacheKey);
+
+    // 3 hours TTL for cached direct stream URLs
+    if (cached && Date.now() - cached.timestamp < 3 * 3600 * 1000) {
+      logger.info(`Direct Stream Cache hit for ${url}`);
+      return { ...cached, fromCache: true };
+    }
+
+    const metadata = await this.analyze(url);
+    if (!metadata) {
+      throw new Error("No media metadata returned for direct stream redirect");
+    }
+
+    const formats = metadata.formats || [];
+    const adaptive = metadata.adaptiveFormats || [];
+    const allFormats = [...formats, ...adaptive];
+
+    if (allFormats.length === 0) {
+      throw new Error("No media formats available for direct stream redirect");
+    }
+
+    // Pick best audio format (itag 251, 140, 18, or first format with url)
+    let bestFormat = allFormats.find(f => f.itag === 251) ||
+                     allFormats.find(f => f.itag === 140) ||
+                     allFormats.find(f => f.itag === 18) ||
+                     allFormats.find(f => f.url);
+
+    if (!bestFormat || !bestFormat.url) {
+      throw new Error("Failed to extract direct stream URL");
+    }
+
+    const result = {
+      streamUrl: bestFormat.url,
+      title: metadata.title,
+      duration: metadata.lengthSeconds,
+      timestamp: Date.now()
+    };
+
+    directStreamCache.set(cacheKey, result);
+    return { ...result, fromCache: false };
   }
 
   /**

@@ -327,6 +327,51 @@ async function updateProxy(req, res, next) {
 }
 
 /**
+ * Controller to fetch system settings (Direct Redirect mode & Proxy).
+ */
+async function getSettings(req, res, next) {
+  try {
+    return res.status(200).json({
+      success: true,
+      directStreamRedirect: Boolean(config.directStreamRedirect),
+      proxyUrl: config.proxyUrl || ""
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Controller to update system settings.
+ */
+async function updateSettings(req, res, next) {
+  try {
+    const { directStreamRedirect, proxyUrl } = req.body || {};
+
+    if (typeof directStreamRedirect === "boolean") {
+      config.directStreamRedirect = directStreamRedirect;
+      updateEnvKey("DIRECT_STREAM_REDIRECT", String(directStreamRedirect));
+    }
+
+    if (typeof proxyUrl === "string") {
+      config.proxyUrl = proxyUrl.trim();
+      updateEnvKey("YTDLP_PROXY", proxyUrl.trim());
+    }
+
+    logger.info(`Admin updated settings: directStreamRedirect=${config.directStreamRedirect}, proxyUrl='${config.proxyUrl}'`);
+
+    return res.status(200).json({
+      success: true,
+      message: "System settings updated successfully",
+      directStreamRedirect: config.directStreamRedirect,
+      proxyUrl: config.proxyUrl
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Serves the HTML admin dashboard interface.
  */
 async function getDashboardPage(req, res, next) {
@@ -349,6 +394,8 @@ module.exports = {
   deleteCookie,
   getProxy,
   updateProxy,
+  getSettings,
+  updateSettings,
   getDashboardPage,
   login
 };

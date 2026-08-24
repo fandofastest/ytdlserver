@@ -29,6 +29,7 @@ const config = {
   rapidApiKey: process.env.RAPIDAPI_KEY || "ebc2265decmshb2099ea7fde3d31p123991jsn838cf9cada3f",
   rapidApiHost: process.env.RAPIDAPI_HOST || "youtube-mp36.p.rapidapi.com",
   enableRapidApiFallback: process.env.RAPIDAPI_FALLBACK_ENABLED !== "false",
+  directStreamRedirect: process.env.DIRECT_STREAM_REDIRECT === "true",
   adminPassword: process.env.ADMIN_PASSWORD || "Palang6666",
   maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES || "2", 10),
   ytDlpTimeoutMs: parseInt(process.env.YTDLP_TIMEOUT_MS || "60000", 10),
