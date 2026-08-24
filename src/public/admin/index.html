@@ -823,20 +823,55 @@
         return;
       }
 
-      container.innerHTML = cookies.map(item => `
-        <div class="cookie-card">
-          <div class="cookie-card-title">
-            <span>🍪 ${escapeHtml(item.filename)}</span>
-            <span style="color: var(--accent-local); font-size: 0.75rem;">Active</span>
+      container.innerHTML = cookies.map(item => {
+        const isLimited = item.status === 'limited';
+        const minsLeft = Math.ceil((item.cooldownSec || 0) / 60);
+
+        const badgeHtml = isLimited
+          ? `<span style="color: #f59e0b; font-size: 0.75rem; background: rgba(245, 158, 11, 0.15); padding: 0.2rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(245, 158, 11, 0.3);">⚠️ Rate Limited (${minsLeft}m)</span>`
+          : `<span style="color: var(--accent-local); font-size: 0.75rem; background: rgba(16, 185, 129, 0.15); padding: 0.2rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 Active</span>`;
+
+        const resetBtnHtml = isLimited
+          ? `<button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="resetCookieCooldown('${escapeHtml(item.filename)}')">Reset Cooldown 🔄</button>`
+          : '';
+
+        return `
+          <div class="cookie-card" style="${isLimited ? 'border-color: rgba(245, 158, 11, 0.4);' : ''}">
+            <div class="cookie-card-title">
+              <span>🍪 ${escapeHtml(item.filename)}</span>
+              ${badgeHtml}
+            </div>
+            <div class="cookie-card-meta">
+              <div>Lines: <strong>${item.lineCount}</strong> entries</div>
+              <div>Size: <strong>${(item.sizeBytes / 1024).toFixed(1)} KB</strong></div>
+              <div>Status: ${isLimited ? `<strong style="color:#f59e0b;">Cooldown (${minsLeft}m)</strong>` : '<strong style="color:var(--accent-local);">Ready</strong>'}</div>
+              <div>Modified: ${new Date(item.lastModified).toLocaleTimeString()}</div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+              ${resetBtnHtml}
+              <button class="cookie-delete-btn" onclick="deleteCookieFile('${escapeHtml(item.filename)}')">Delete Cookie</button>
+            </div>
           </div>
-          <div class="cookie-card-meta">
-            <div>Lines: <strong>${item.lineCount}</strong> entries</div>
-            <div>Size: <strong>${(item.sizeBytes / 1024).toFixed(1)} KB</strong></div>
-            <div>Modified: ${new Date(item.lastModified).toLocaleTimeString()}</div>
-          </div>
-          <button class="cookie-delete-btn" onclick="deleteCookieFile('${escapeHtml(item.filename)}')">Delete Cookie</button>
-        </div>
-      `).join('');
+        `;
+      }).join('');
+    }
+
+    async function resetCookieCooldown(filename) {
+      try {
+        const resp = await adminFetch('/api/admin/cookies/reset-cooldown', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: filename })
+        });
+        const json = await resp.json();
+        if (json.success) {
+          renderCookies(json.cookies || []);
+        } else {
+          alert("Error: " + (json.error || "Failed to reset cooldown"));
+        }
+      } catch (err) {
+        if (err.message !== 'Unauthorized') alert("Error resetting cooldown: " + err.message);
+      }
     }
 
     function toggleAddCookieForm() {

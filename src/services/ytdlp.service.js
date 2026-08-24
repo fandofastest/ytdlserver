@@ -640,6 +640,38 @@ class YtDlpService {
   }
 
   /**
+   * Returns active cookie cooldown map object.
+   * @returns {Object} Map of filename -> remainingSec
+   */
+  getCookieCooldowns() {
+    const now = Date.now();
+    const result = {};
+    for (const [filePath, unblockTime] of cookieCooldownMap.entries()) {
+      if (now < unblockTime) {
+        const filename = path.basename(filePath);
+        const remainingSec = Math.ceil((unblockTime - now) / 1000);
+        result[filename] = remainingSec;
+        result[filePath] = remainingSec;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Manually clears cooldown for a specific cookie file.
+   * @param {string} target - Filename or path of cookie.
+   */
+  clearCookieCooldown(target) {
+    if (!target) return;
+    const baseTarget = path.basename(target);
+    for (const [filePath] of cookieCooldownMap.entries()) {
+      if (filePath === target || path.basename(filePath) === baseTarget) {
+        cookieCooldownMap.delete(filePath);
+      }
+    }
+  }
+
+  /**
    * Runs yt-dlp -U to update executable to latest release on GitHub.
    * 
    * @returns {Promise<string>} Output result message from yt-dlp.

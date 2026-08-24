@@ -21,6 +21,7 @@ router.post("/api/admin/whitelist/remove", verifyAdminPassword, adminController.
 router.get("/api/admin/cookies", verifyAdminPassword, adminController.getCookies);
 router.post("/api/admin/cookies/add", verifyAdminPassword, adminController.addCookie);
 router.post("/api/admin/cookies/delete", verifyAdminPassword, adminController.deleteCookie);
+router.post("/api/admin/cookies/reset-cooldown", verifyAdminPassword, adminController.resetCookieCooldown);
 
 // Proxy Management Routes
 router.get("/api/admin/proxy", verifyAdminPassword, adminController.getProxy);

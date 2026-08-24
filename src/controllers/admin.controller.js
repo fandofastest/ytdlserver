@@ -153,6 +153,7 @@ function listCookieFiles() {
     os.homedir()
   ].filter(Boolean);
 
+  const cooldowns = ytDlpService.getCookieCooldowns() || {};
   const foundMap = new Map();
 
   for (let i = 1; i <= 10; i++) {
@@ -164,11 +165,17 @@ function listCookieFiles() {
           const stats = fs.statSync(fullPath);
           const content = fs.readFileSync(fullPath, "utf8");
           const lines = content.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length;
+          
+          const cooldownSec = cooldowns[filename] || cooldowns[fullPath] || 0;
+          const isLimited = cooldownSec > 0;
+
           foundMap.set(filename, {
             filename: filename,
             path: fullPath,
             sizeBytes: stats.size,
             lineCount: lines,
+            status: isLimited ? "limited" : "active",
+            cooldownSec: cooldownSec,
             lastModified: stats.mtime
           });
         } catch (e) {
@@ -290,6 +297,26 @@ async function deleteCookie(req, res, next) {
 }
 
 /**
+ * Controller to reset rate limit cooldown for a specific cookie.
+ */
+async function resetCookieCooldown(req, res, next) {
+  try {
+    const { filename } = req.body || {};
+    if (filename) {
+      ytDlpService.clearCookieCooldown(filename);
+      logger.info(`Admin reset cooldown status for cookie: ${filename}`);
+    }
+    return res.status(200).json({
+      success: true,
+      message: `Cooldown reset for '${filename}'`,
+      cookies: listCookieFiles()
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Controller to fetch current Proxy URL.
  */
 async function getProxy(req, res, next) {
@@ -392,6 +419,7 @@ module.exports = {
   getCookies,
   addCookie,
   deleteCookie,
+  resetCookieCooldown,
   getProxy,
   updateProxy,
   getSettings,
