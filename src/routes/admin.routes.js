@@ -17,4 +17,13 @@ router.get("/api/admin/whitelist", verifyAdminPassword, adminController.getWhite
 router.post("/api/admin/whitelist/add", verifyAdminPassword, adminController.addWhitelist);
 router.post("/api/admin/whitelist/remove", verifyAdminPassword, adminController.removeWhitelist);
 
+// Cookie Management Routes
+router.get("/api/admin/cookies", verifyAdminPassword, adminController.getCookies);
+router.post("/api/admin/cookies/add", verifyAdminPassword, adminController.addCookie);
+router.post("/api/admin/cookies/delete", verifyAdminPassword, adminController.deleteCookie);
+
+// Proxy Management Routes
+router.get("/api/admin/proxy", verifyAdminPassword, adminController.getProxy);
+router.post("/api/admin/proxy", verifyAdminPassword, adminController.updateProxy);
+
 module.exports = router;
