@@ -238,33 +238,7 @@ async function stream(req, res, next) {
     const protocol = req.protocol;
     const cacheKey = generateSha256(url);
 
-    const isDirectRedirectMode = config.directStreamRedirect || req.query.mode === "direct";
-
-    if (isDirectRedirectMode) {
-      logger.info(`Direct Stream Redirect Mode active for URL: ${url}`);
-      const directInfo = await ytDlpService.getDirectStreamUrl(url);
-      const durationMs = Date.now() - startTime;
-      statsService.recordHit(directInfo.fromCache ? "local" : "ytdl", {
-        url,
-        filename: `${directInfo.title || cacheKey}.mp3`,
-        id: cacheKey,
-        durationMs
-      });
-
-      if (shouldRedirect) {
-        return res.redirect(302, directInfo.streamUrl);
-      }
-      return res.status(200).json({
-        success: true,
-        mode: "direct_stream_redirect",
-        cached: directInfo.fromCache,
-        streamUrl: directInfo.streamUrl,
-        title: directInfo.title,
-        duration: directInfo.duration
-      });
-    }
-
-    // 1. Zero-Quota Check: Check if local file already exists on disk
+    // 1. Zero-Quota Check: Check if local file already exists on disk FIRST
     const existingFile = ytDlpService.findLocalFileByHash(cacheKey);
     if (existingFile) {
       logger.info(`Zero-Quota Hit: Serving local cached MP3 file for URL hash (${cacheKey}): ${existingFile.filename}`);
@@ -281,6 +255,39 @@ async function stream(req, res, next) {
         localFile: true,
         downloadUrl: localDownloadUrl,
         filename: existingFile.filename
+      });
+    }
+
+    const isDirectRedirectMode = config.directStreamRedirect || req.query.mode === "direct";
+
+    if (isDirectRedirectMode) {
+      logger.info(`Direct Stream Redirect Mode active for URL: ${url}. Triggering async background local disk download...`);
+
+      // Trigger background local download asynchronously (fire-and-forget so next request hits local file!)
+      ytDlpService._spawnDownload(cacheKey, url, "bestaudio/best").catch((err) => {
+        logger.warn(`Async background local download failed for ${cacheKey}: ${err.message}`);
+      });
+
+      const directInfo = await ytDlpService.getDirectStreamUrl(url);
+      const durationMs = Date.now() - startTime;
+      statsService.recordHit(directInfo.fromCache ? "local" : "ytdl", {
+        url,
+        filename: `${directInfo.title || cacheKey}.mp3`,
+        id: cacheKey,
+        durationMs
+      });
+
+      if (shouldRedirect) {
+        return res.redirect(302, directInfo.streamUrl);
+      }
+      return res.status(200).json({
+        success: true,
+        mode: "direct_stream_redirect",
+        backgroundCachingStarted: true,
+        cached: directInfo.fromCache,
+        streamUrl: directInfo.streamUrl,
+        title: directInfo.title,
+        duration: directInfo.duration
       });
     }
 
@@ -373,10 +380,27 @@ async function downloadByVideoId(req, res, next) {
     const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const urlHash = generateSha256(targetUrl);
 
+    // 1. Zero-Quota Check: Check if local file exists by URL hash or Video ID FIRST
+    let localFile = ytDlpService.findLocalFileByHash(urlHash) || ytDlpService.findLocalFileByHash(videoId);
+    if (localFile && fs.existsSync(localFile.filePath)) {
+      logger.info(`Zero-Quota hit: Direct download file for Video ID ${videoId} (${localFile.filename})`);
+      const durationMs = Date.now() - startTime;
+      statsService.recordHit("local", { url: targetUrl, videoId, filename: localFile.filename, durationMs });
+      return res.download(localFile.filePath, localFile.filename, (err) => {
+        if (err && !res.headersSent) next(err);
+      });
+    }
+
     const isDirectRedirectMode = config.directStreamRedirect || (req.query && req.query.mode === "direct");
 
     if (isDirectRedirectMode) {
-      logger.info(`Direct Stream Redirect Mode active for Video ID: ${videoId}`);
+      logger.info(`Direct Stream Redirect Mode active for Video ID: ${videoId}. Triggering async background local disk download...`);
+
+      // Trigger background local download asynchronously (fire-and-forget so next request hits local file!)
+      ytDlpService._spawnDownload(urlHash, targetUrl, "bestaudio/best").catch((err) => {
+        logger.warn(`Async background local download failed for Video ID ${videoId}: ${err.message}`);
+      });
+
       const directInfo = await ytDlpService.getDirectStreamUrl(targetUrl);
       const durationMs = Date.now() - startTime;
       statsService.recordHit(directInfo.fromCache ? "local" : "ytdl", {
@@ -387,17 +411,6 @@ async function downloadByVideoId(req, res, next) {
       });
 
       return res.redirect(302, directInfo.streamUrl);
-    }
-
-    // 1. Zero-Quota Check: Check if local file exists by URL hash or Video ID
-    let localFile = ytDlpService.findLocalFileByHash(urlHash) || ytDlpService.findLocalFileByHash(videoId);
-    if (localFile && fs.existsSync(localFile.filePath)) {
-      logger.info(`Zero-Quota hit: Direct download file for Video ID ${videoId} (${localFile.filename})`);
-      const durationMs = Date.now() - startTime;
-      statsService.recordHit("local", { url: targetUrl, videoId, filename: localFile.filename, durationMs });
-      return res.download(localFile.filePath, localFile.filename, (err) => {
-        if (err && !res.headersSent) next(err);
-      });
     }
 
     logger.info(`Local file miss for Video ID: ${videoId} (${urlHash}). Triggering background download...`);
