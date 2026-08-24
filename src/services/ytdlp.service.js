@@ -75,9 +75,10 @@ function getCommonArgs(options = {}) {
     args.push("--cookies", selectedCookie);
   }
 
-  // Automatically attach proxy if configured
-  if (config.proxyUrl) {
-    args.push("--proxy", config.proxyUrl);
+  // Attach proxy only when requested for fallback or when config explicitly forces it
+  const targetProxy = options.useProxy ? (options.proxyUrl || config.proxyUrl) : (options.forceProxy ? config.proxyUrl : null);
+  if (targetProxy) {
+    args.push("--proxy", targetProxy);
   }
 
   return args;
@@ -188,9 +189,14 @@ class YtDlpService {
 
           // If cookie rate limit or bot check occurred, try fallback cookie if available
           const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable/i.test(stderrData);
-          if (isCookieOrRateLimitError && cookieIndex + 1 < availableCookies.length) {
-            logger.warn(`yt-dlp analyze hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
-            return this._spawnAnalyze(url, { ...options, cookieIndex: cookieIndex + 1 }).then(resolve).catch(reject);
+          if (isCookieOrRateLimitError) {
+            if (cookieIndex + 1 < availableCookies.length) {
+              logger.warn(`yt-dlp analyze hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
+              return this._spawnAnalyze(url, { ...options, cookieIndex: cookieIndex + 1 }).then(resolve).catch(reject);
+            } else if (!options.useProxy && config.proxyUrl) {
+              logger.warn(`yt-dlp analyze hit IP rate-limit on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
+              return this._spawnAnalyze(url, { ...options, cookieIndex: 0, useProxy: true }).then(resolve).catch(reject);
+            }
           }
 
           if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
@@ -264,7 +270,7 @@ class YtDlpService {
    * @param {boolean} [disableImpersonate=false] - Retries execution without --impersonate if curl-cffi is missing.
    * @returns {Promise<void>} Resolves when download finishes.
    */
-  _spawnDownload(downloadId, url, format, disableImpersonate = false, cookieIndex = 0) {
+  _spawnDownload(downloadId, url, format, disableImpersonate = false, cookieIndex = 0, useProxy = false) {
     return new Promise((resolve, reject) => {
       let job = downloadJobsMap.get(downloadId);
       if (!job) {
@@ -294,7 +300,7 @@ class YtDlpService {
       const availableCookies = getAvailableCookiePaths();
       const currentCookie = availableCookies[cookieIndex] || null;
 
-      const commonArgs = getCommonArgs({ disableImpersonate, cookiePath: currentCookie });
+      const commonArgs = getCommonArgs({ disableImpersonate, cookiePath: currentCookie, useProxy });
       const args = [
         ...commonArgs,
         "-f",
@@ -305,7 +311,7 @@ class YtDlpService {
         url
       ];
 
-      logger.info(`Spawning yt-dlp download process (cookie ${cookieIndex + 1}/${availableCookies.length || 1}): ${executable} ${args.join(" ")}`);
+      logger.info(`Spawning yt-dlp download process (cookie ${cookieIndex + 1}/${availableCookies.length || 1}, proxy=${useProxy}): ${executable} ${args.join(" ")}`);
 
       const child = spawn(executable, args, {
         windowsHide: true
@@ -377,14 +383,19 @@ class YtDlpService {
           const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
           if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
             logger.warn(`Download process ${downloadId} impersonation failed. Retrying download without --impersonate...`);
-            return this._spawnDownload(downloadId, url, format, true, cookieIndex).then(resolve).catch(reject);
+            return this._spawnDownload(downloadId, url, format, true, cookieIndex, useProxy).then(resolve).catch(reject);
           }
 
           // If cookie rate limit or bot check occurred, try fallback cookie if available
           const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable/i.test(stderrData);
-          if (isCookieOrRateLimitError && cookieIndex + 1 < availableCookies.length) {
-            logger.warn(`Download process ${downloadId} hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
-            return this._spawnDownload(downloadId, url, format, disableImpersonate, cookieIndex + 1).then(resolve).catch(reject);
+          if (isCookieOrRateLimitError) {
+            if (cookieIndex + 1 < availableCookies.length) {
+              logger.warn(`Download process ${downloadId} hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
+              return this._spawnDownload(downloadId, url, format, disableImpersonate, cookieIndex + 1, useProxy).then(resolve).catch(reject);
+            } else if (!useProxy && config.proxyUrl) {
+              logger.warn(`Download process ${downloadId} hit IP rate-limit on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
+              return this._spawnDownload(downloadId, url, format, disableImpersonate, 0, true).then(resolve).catch(reject);
+            }
           }
 
           if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
