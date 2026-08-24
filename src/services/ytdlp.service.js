@@ -285,10 +285,12 @@ class YtDlpService {
       throw new Error("No media formats available for direct stream redirect");
     }
 
-    // Pick best audio format (id '251', '140', '18', audio: true, or first format with url)
+    // Pick best audio format (id '251', '140', '249', '250', audio-only, or first format with url)
     let bestFormat = allFormats.find(f => (f.id === '251' || f.itag === 251) && f.url) ||
                      allFormats.find(f => (f.id === '140' || f.itag === 140) && f.url) ||
-                     allFormats.find(f => (f.id === '18' || f.itag === 18) && f.url) ||
+                     allFormats.find(f => (f.id === '249' || f.itag === 249) && f.url) ||
+                     allFormats.find(f => (f.id === '250' || f.itag === 250) && f.url) ||
+                     allFormats.find(f => f.audio && !f.video && f.url) ||
                      allFormats.find(f => f.audio && f.url) ||
                      allFormats.find(f => f.url);
 
@@ -385,11 +387,15 @@ class YtDlpService {
       const availableCookies = getAvailableCookiePaths();
       const currentCookie = availableCookies[cookieIndex] || null;
 
+      const isAudioOnly = !format || format === "mp3" || format === "audio" || format === "bestaudio" || format === "bestaudio/best" || (typeof format === "string" && format.includes("audio"));
+      const targetFormat = (format === "mp3" || format === "audio") ? "bestaudio/best" : (format || "best");
+
       const commonArgs = getCommonArgs({ disableImpersonate, cookiePath: currentCookie, useProxy });
       const args = [
         ...commonArgs,
         "-f",
-        format || "best",
+        targetFormat,
+        ...(isAudioOnly ? ["-x", "--audio-format", "mp3", "--audio-quality", "0"] : []),
         "-o",
         outputPattern,
         "--newline", // Enable clean line-by-line stdout for progress parsing
@@ -588,18 +594,24 @@ class YtDlpService {
    * Scans downloads directory for an existing local file starting with fileHash prefix.
    * 
    * @param {string} fileHash - SHA256 or unique file hash identifier.
+   * @param {string} [preferredExt] - Optional extension filter (e.g. "mp3").
    * @returns {Object|null} Object containing filename and filePath if found, or null.
    */
-  findLocalFileByHash(fileHash) {
+  findLocalFileByHash(fileHash, preferredExt = null) {
     if (!fileHash || !fs.existsSync(config.downloadsDir)) {
       return null;
     }
     try {
       const files = fs.readdirSync(config.downloadsDir);
+      const extMatch = preferredExt ? (preferredExt.startsWith(".") ? preferredExt.toLowerCase() : `.${preferredExt.toLowerCase()}`) : null;
+
       const matched = files.find((file) => {
         if (!file.startsWith(fileHash)) return false;
         const lower = file.toLowerCase();
         if (lower.endsWith(".part") || lower.endsWith(".ytdl") || lower.endsWith(".tmp") || lower.endsWith(".temp")) {
+          return false;
+        }
+        if (extMatch && !lower.endsWith(extMatch)) {
           return false;
         }
         return true;
