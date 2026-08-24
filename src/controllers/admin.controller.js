@@ -96,6 +96,28 @@ async function removeWhitelist(req, res, next) {
 }
 
 /**
+ * Controller to verify Admin Password.
+ */
+async function login(req, res, next) {
+  try {
+    const config = require("../config/app.config");
+    const { password } = req.body || {};
+    if (password === config.adminPassword) {
+      return res.status(200).json({
+        success: true,
+        message: "Admin authentication successful"
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      message: "Incorrect Admin Password"
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Serves the HTML admin dashboard interface.
  */
 async function getDashboardPage(req, res, next) {
@@ -113,5 +135,6 @@ module.exports = {
   getWhitelist,
   addWhitelist,
   removeWhitelist,
-  getDashboardPage
+  getDashboardPage,
+  login
 };

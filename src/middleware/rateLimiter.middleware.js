@@ -12,6 +12,10 @@ const apiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
+    // Exempt Admin Dashboard and Admin APIs from rate limiting
+    if (req.path.startsWith("/admin") || req.path.startsWith("/api/admin")) {
+      return true;
+    }
     const clientIp = req.ip || (req.socket ? req.socket.remoteAddress : "") || "";
     return statsService.isIpWhitelisted(clientIp);
   },

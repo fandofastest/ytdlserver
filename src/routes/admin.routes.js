@@ -1,24 +1,20 @@
 const express = require("express");
 const adminController = require("../controllers/admin.controller");
+const { verifyAdminPassword } = require("../middleware/adminAuth.middleware");
 
 const router = express.Router();
 
 // GET /admin - Serve Admin Dashboard UI
 router.get("/admin", adminController.getDashboardPage);
 
-// GET /api/admin/stats - Statistics JSON API
-router.get("/api/admin/stats", adminController.getStats);
+// POST /api/admin/login - Verify admin password
+router.post("/api/admin/login", adminController.login);
 
-// POST /api/admin/reset - Reset statistics API
-router.post("/api/admin/reset", adminController.resetStats);
-
-// GET /api/admin/whitelist - Get whitelisted IPs and client IP
-router.get("/api/admin/whitelist", adminController.getWhitelist);
-
-// POST /api/admin/whitelist/add - Add IP to whitelist
-router.post("/api/admin/whitelist/add", adminController.addWhitelist);
-
-// POST /api/admin/whitelist/remove - Remove IP from whitelist
-router.post("/api/admin/whitelist/remove", adminController.removeWhitelist);
+// Protected Admin API Endpoints (Require X-Admin-Password header or password query/body)
+router.get("/api/admin/stats", verifyAdminPassword, adminController.getStats);
+router.post("/api/admin/reset", verifyAdminPassword, adminController.resetStats);
+router.get("/api/admin/whitelist", verifyAdminPassword, adminController.getWhitelist);
+router.post("/api/admin/whitelist/add", verifyAdminPassword, adminController.addWhitelist);
+router.post("/api/admin/whitelist/remove", verifyAdminPassword, adminController.removeWhitelist);
 
 module.exports = router;
