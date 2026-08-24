@@ -245,7 +245,7 @@ class YtDlpService {
       return { ...cached, fromCache: true };
     }
 
-    const metadata = await this.analyze(url);
+    const metadata = await this._spawnAnalyze(url);
     if (!metadata) {
       throw new Error("No media metadata returned for direct stream redirect");
     }
