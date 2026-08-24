@@ -35,7 +35,9 @@ function parseAndSimplifyYtDlpJson(rawData) {
 
     return {
       id: String(fmt.format_id || ""),
+      itag: parseInt(fmt.format_id, 10) || null,
       ext: fmt.ext || "",
+      url: fmt.url || "",
       quality: String(quality),
       fps: typeof fmt.fps === "number" ? fmt.fps : null,
       filesize: fmt.filesize || fmt.filesize_approx || null,

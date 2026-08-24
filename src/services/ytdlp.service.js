@@ -258,10 +258,11 @@ class YtDlpService {
       throw new Error("No media formats available for direct stream redirect");
     }
 
-    // Pick best audio format (itag 251, 140, 18, or first format with url)
-    let bestFormat = allFormats.find(f => f.itag === 251) ||
-                     allFormats.find(f => f.itag === 140) ||
-                     allFormats.find(f => f.itag === 18) ||
+    // Pick best audio format (id '251', '140', '18', audio: true, or first format with url)
+    let bestFormat = allFormats.find(f => (f.id === '251' || f.itag === 251) && f.url) ||
+                     allFormats.find(f => (f.id === '140' || f.itag === 140) && f.url) ||
+                     allFormats.find(f => (f.id === '18' || f.itag === 18) && f.url) ||
+                     allFormats.find(f => f.audio && f.url) ||
                      allFormats.find(f => f.url);
 
     if (!bestFormat || !bestFormat.url) {
@@ -271,7 +272,7 @@ class YtDlpService {
     const result = {
       streamUrl: bestFormat.url,
       title: metadata.title,
-      duration: metadata.lengthSeconds,
+      duration: metadata.duration || metadata.lengthSeconds || 0,
       timestamp: Date.now()
     };
 
