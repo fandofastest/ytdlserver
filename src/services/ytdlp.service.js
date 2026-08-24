@@ -32,6 +32,9 @@ function getExecutablePath() {
   return "yt-dlp";
 }
 
+// In-memory cooldown tracker for rate-limited/failed cookie files
+const cookieCooldownMap = new Map();
+
 /**
  * Scans available cookie files for rotation and fallback.
  * @returns {Array<string>} Array of existing absolute cookie file paths.
@@ -47,7 +50,21 @@ function getAvailableCookiePaths() {
     candidates.push(`/home/fandofast/${filename}`);
   }
 
-  return Array.from(new Set(candidates)).filter((p) => p && fs.existsSync(p));
+  const now = Date.now();
+  const validFiles = Array.from(new Set(candidates)).filter((p) => {
+    if (!p || !fs.existsSync(p)) return false;
+    const cooldown = cookieCooldownMap.get(p);
+    if (cooldown && now < cooldown) return false;
+    return true;
+  });
+
+  // If all cookies are in cooldown, reset cooldown map to allow retry
+  if (validFiles.length === 0) {
+    cookieCooldownMap.clear();
+    return Array.from(new Set(candidates)).filter((p) => p && fs.existsSync(p));
+  }
+
+  return validFiles;
 }
 
 /**
@@ -56,16 +73,19 @@ function getAvailableCookiePaths() {
  * @param {Object} [options={}] - Execution options.
  * @param {boolean} [options.disableImpersonate=false] - Disable --impersonate argument if true.
  * @param {string} [options.cookiePath] - Specific cookie path to use for this execution.
+ * @param {boolean} [options.skipSleepRequests=false] - Omit --sleep-requests for fast operations.
  * @returns {Array<string>} Common args array.
  */
 function getCommonArgs(options = {}) {
   const args = [
     "--no-playlist",
     "--js-runtimes",
-    "node",
-    "--sleep-requests",
-    "1.5"
+    "node"
   ];
+
+  if (!options.skipSleepRequests) {
+    args.push("--sleep-requests", "0.5");
+  }
 
   if (config.userAgent) {
     args.push("--user-agent", config.userAgent);
@@ -128,7 +148,7 @@ class YtDlpService {
 
     return new Promise((resolve, reject) => {
       const executable = getExecutablePath();
-      const commonArgs = getCommonArgs({ disableImpersonate, cookiePath: currentCookie });
+      const commonArgs = getCommonArgs({ disableImpersonate, cookiePath: currentCookie, skipSleepRequests: true });
       const args = [
         "--dump-single-json",
         ...commonArgs,
@@ -191,6 +211,13 @@ class YtDlpService {
         }
 
         if (code !== 0) {
+          // Record cookie failure in cooldown map if rate-limited or expired
+          const isCookieError = /rate-limited|Sign in to confirm|invalid Netscape|429/i.test(stderrData);
+          if (isCookieError && currentCookie) {
+            cookieCooldownMap.set(currentCookie, Date.now() + 15 * 60 * 1000); // 15 min cooldown
+            logger.warn(`Cookie '${path.basename(currentCookie)}' hit rate limit/session error. Cooldown active for 15 minutes.`);
+          }
+
           // If impersonation failed because curl-cffi or impersonate target is missing, retry without --impersonate
           const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
           if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
