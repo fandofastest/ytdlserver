@@ -379,6 +379,15 @@ class YtDlpService {
         }
 
         if (code !== 0) {
+          logger.warn(`Download process ${downloadId} exited with code ${code}. Stderr: ${stderrData.trim()}`);
+
+          // If format is not available, retry with fallback format 'best'
+          const isFormatError = /Requested format is not available|format.*not available/i.test(stderrData);
+          if (isFormatError && format !== "best") {
+            logger.warn(`Download process ${downloadId} format '${format}' not available. Retrying with format 'best'...`);
+            return this._spawnDownload(downloadId, url, "best", disableImpersonate, cookieIndex, useProxy).then(resolve).catch(reject);
+          }
+
           // If impersonation failed because curl-cffi or impersonate target is missing, retry without --impersonate
           const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
           if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
@@ -386,14 +395,14 @@ class YtDlpService {
             return this._spawnDownload(downloadId, url, format, true, cookieIndex, useProxy).then(resolve).catch(reject);
           }
 
-          // If cookie rate limit or bot check occurred, try fallback cookie if available
-          const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable/i.test(stderrData);
+          // If cookie rate limit, bot check, or 403 Forbidden occurred, try fallback cookie or proxy if available
+          const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable|Forbidden|403/i.test(stderrData);
           if (isCookieOrRateLimitError) {
             if (cookieIndex + 1 < availableCookies.length) {
-              logger.warn(`Download process ${downloadId} hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
+              logger.warn(`Download process ${downloadId} hit rate-limit/403. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
               return this._spawnDownload(downloadId, url, format, disableImpersonate, cookieIndex + 1, useProxy).then(resolve).catch(reject);
             } else if (!useProxy && config.proxyUrl) {
-              logger.warn(`Download process ${downloadId} hit IP rate-limit on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
+              logger.warn(`Download process ${downloadId} hit rate-limit/403 on all cookies. Retrying with fallback proxy: ${config.proxyUrl}`);
               return this._spawnDownload(downloadId, url, format, disableImpersonate, 0, true).then(resolve).catch(reject);
             }
           }
