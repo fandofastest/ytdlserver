@@ -25,10 +25,28 @@ function getExecutablePath() {
 }
 
 /**
- * Builds common yt-dlp command arguments including cookie injection, proxy, user-agent, and impersonation.
+ * Scans available cookie files for rotation and fallback.
+ * @returns {Array<string>} Array of existing absolute cookie file paths.
+ */
+function getAvailableCookiePaths() {
+  const candidates = [];
+  if (config.cookiesPath) candidates.push(config.cookiesPath);
+
+  const baseDir = config.cookiesPath ? path.dirname(config.cookiesPath) : os.homedir();
+  candidates.push(path.join(baseDir, "cookies2.txt"));
+  candidates.push(path.join(baseDir, "cookies.txt"));
+  candidates.push("/home/fandofast/cookies2.txt");
+  candidates.push("/home/fandofast/cookies.txt");
+
+  return Array.from(new Set(candidates)).filter((p) => p && fs.existsSync(p));
+}
+
+/**
+ * Builds array of common yt-dlp arguments.
  * 
  * @param {Object} [options={}] - Execution options.
  * @param {boolean} [options.disableImpersonate=false] - Disable --impersonate argument if true.
+ * @param {string} [options.cookiePath] - Specific cookie path to use for this execution.
  * @returns {Array<string>} Common args array.
  */
 function getCommonArgs(options = {}) {
@@ -50,9 +68,11 @@ function getCommonArgs(options = {}) {
     args.push("--extractor-args", config.extractorArgs);
   }
 
-  // Automatically attach cookies file if present (bypasses CAPTCHA / bot detection)
-  if (config.cookiesPath && fs.existsSync(config.cookiesPath)) {
-    args.push("--cookies", config.cookiesPath);
+  // Attach selected or default cookies file if present
+  const availableCookies = getAvailableCookiePaths();
+  const selectedCookie = options.cookiePath || (availableCookies.length > 0 ? availableCookies[0] : null);
+  if (selectedCookie && fs.existsSync(selectedCookie)) {
+    args.push("--cookies", selectedCookie);
   }
 
   // Automatically attach proxy if configured
@@ -90,17 +110,20 @@ class YtDlpService {
   _spawnAnalyze(url, options = {}) {
     const disableImpersonate = Boolean(options.disableImpersonate);
     const useFastTimeout = Boolean(options.useFastTimeout);
+    const cookieIndex = parseInt(options.cookieIndex || "0", 10);
+    const availableCookies = getAvailableCookiePaths();
+    const currentCookie = availableCookies[cookieIndex] || null;
 
     return new Promise((resolve, reject) => {
       const executable = getExecutablePath();
-      const commonArgs = getCommonArgs({ disableImpersonate });
+      const commonArgs = getCommonArgs({ disableImpersonate, cookiePath: currentCookie });
       const args = [
         "--dump-single-json",
         ...commonArgs,
         url
       ];
 
-      logger.info(`Spawning yt-dlp analyze process: ${executable} ${args.join(" ")}`);
+      logger.info(`Spawning yt-dlp analyze process (cookie ${cookieIndex + 1}/${availableCookies.length || 1}): ${executable} ${args.join(" ")}`);
 
       const child = spawn(executable, args, {
         windowsHide: true
@@ -160,7 +183,14 @@ class YtDlpService {
           const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
           if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
             logger.warn("yt-dlp impersonation failed (curl-cffi missing on host). Retrying analyze without --impersonate...");
-            return this._spawnAnalyze(url, { disableImpersonate: true, useFastTimeout }).then(resolve).catch(reject);
+            return this._spawnAnalyze(url, { ...options, disableImpersonate: true }).then(resolve).catch(reject);
+          }
+
+          // If cookie rate limit or bot check occurred, try fallback cookie if available
+          const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable/i.test(stderrData);
+          if (isCookieOrRateLimitError && cookieIndex + 1 < availableCookies.length) {
+            logger.warn(`yt-dlp analyze hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
+            return this._spawnAnalyze(url, { ...options, cookieIndex: cookieIndex + 1 }).then(resolve).catch(reject);
           }
 
           if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
@@ -234,7 +264,7 @@ class YtDlpService {
    * @param {boolean} [disableImpersonate=false] - Retries execution without --impersonate if curl-cffi is missing.
    * @returns {Promise<void>} Resolves when download finishes.
    */
-  _spawnDownload(downloadId, url, format, disableImpersonate = false) {
+  _spawnDownload(downloadId, url, format, disableImpersonate = false, cookieIndex = 0) {
     return new Promise((resolve, reject) => {
       let job = downloadJobsMap.get(downloadId);
       if (!job) {
@@ -261,7 +291,10 @@ class YtDlpService {
       const executable = getExecutablePath();
       const outputPattern = path.join(config.downloadsDir, `${downloadId}.%(ext)s`);
 
-      const commonArgs = getCommonArgs({ disableImpersonate });
+      const availableCookies = getAvailableCookiePaths();
+      const currentCookie = availableCookies[cookieIndex] || null;
+
+      const commonArgs = getCommonArgs({ disableImpersonate, cookiePath: currentCookie });
       const args = [
         ...commonArgs,
         "-f",
@@ -272,7 +305,7 @@ class YtDlpService {
         url
       ];
 
-      logger.info(`Spawning yt-dlp download process: ${executable} ${args.join(" ")}`);
+      logger.info(`Spawning yt-dlp download process (cookie ${cookieIndex + 1}/${availableCookies.length || 1}): ${executable} ${args.join(" ")}`);
 
       const child = spawn(executable, args, {
         windowsHide: true
@@ -344,7 +377,14 @@ class YtDlpService {
           const isImpersonateError = /curl-cffi|impersonate/i.test(stderrData);
           if (isImpersonateError && !disableImpersonate && config.impersonate && config.impersonate !== "none") {
             logger.warn(`Download process ${downloadId} impersonation failed. Retrying download without --impersonate...`);
-            return this._spawnDownload(downloadId, url, format, true).then(resolve).catch(reject);
+            return this._spawnDownload(downloadId, url, format, true, cookieIndex).then(resolve).catch(reject);
+          }
+
+          // If cookie rate limit or bot check occurred, try fallback cookie if available
+          const isCookieOrRateLimitError = /rate-limited|rate_limited|Sign in to confirm|Video unavailable/i.test(stderrData);
+          if (isCookieOrRateLimitError && cookieIndex + 1 < availableCookies.length) {
+            logger.warn(`Download process ${downloadId} hit cookie rate-limit. Retrying with fallback cookie (${cookieIndex + 2}/${availableCookies.length}): ${availableCookies[cookieIndex + 1]}`);
+            return this._spawnDownload(downloadId, url, format, disableImpersonate, cookieIndex + 1).then(resolve).catch(reject);
           }
 
           if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
