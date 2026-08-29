@@ -272,7 +272,18 @@ class YtDlpService {
       return { ...cached, fromCache: true };
     }
 
-    const metadata = await this._spawnAnalyze(url);
+    let metadata;
+    try {
+      metadata = await this._spawnAnalyze(url);
+    } catch (err) {
+      if (config.enableRapidApiFallback && rapidApiService.isYouTubeUrl(url)) {
+        logger.warn(`yt-dlp analyze failed in getDirectStreamUrl for ${url}. Triggering RapidAPI fallback...`);
+        metadata = await rapidApiService.fetchMetadata(url);
+      } else {
+        throw err;
+      }
+    }
+
     if (!metadata) {
       throw new Error("No media metadata returned for direct stream redirect");
     }
@@ -282,24 +293,37 @@ class YtDlpService {
     const allFormats = [...formats, ...adaptive];
 
     if (allFormats.length === 0) {
+      const streamUrl = metadata.directLink || metadata.url;
+      if (streamUrl) {
+        const result = {
+          streamUrl: streamUrl,
+          title: metadata.title,
+          duration: metadata.duration || 0,
+          timestamp: Date.now()
+        };
+        directStreamCache.set(cacheKey, result);
+        return { ...result, fromCache: false };
+      }
       throw new Error("No media formats available for direct stream redirect");
     }
 
     // Pick best audio format (id '251', '140', '249', '250', audio-only, or first format with url)
-    let bestFormat = allFormats.find(f => (f.id === '251' || f.itag === 251) && f.url) ||
-                     allFormats.find(f => (f.id === '140' || f.itag === 140) && f.url) ||
-                     allFormats.find(f => (f.id === '249' || f.itag === 249) && f.url) ||
-                     allFormats.find(f => (f.id === '250' || f.itag === 250) && f.url) ||
-                     allFormats.find(f => f.audio && !f.video && f.url) ||
-                     allFormats.find(f => f.audio && f.url) ||
-                     allFormats.find(f => f.url);
+    let bestFormat = allFormats.find(f => (f.id === '251' || f.itag === 251) && (f.url || f.directLink)) ||
+                     allFormats.find(f => (f.id === '140' || f.itag === 140) && (f.url || f.directLink)) ||
+                     allFormats.find(f => (f.id === '249' || f.itag === 249) && (f.url || f.directLink)) ||
+                     allFormats.find(f => (f.id === '250' || f.itag === 250) && (f.url || f.directLink)) ||
+                     allFormats.find(f => f.audio && !f.video && (f.url || f.directLink)) ||
+                     allFormats.find(f => f.audio && (f.url || f.directLink)) ||
+                     allFormats.find(f => f.url || f.directLink);
 
-    if (!bestFormat || !bestFormat.url) {
+    const streamUrl = bestFormat ? (bestFormat.url || bestFormat.directLink) : (metadata.directLink || null);
+
+    if (!streamUrl) {
       throw new Error("Failed to extract direct stream URL");
     }
 
     const result = {
-      streamUrl: bestFormat.url,
+      streamUrl: streamUrl,
       title: metadata.title,
       duration: metadata.duration || metadata.lengthSeconds || 0,
       timestamp: Date.now()

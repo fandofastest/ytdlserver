@@ -5,6 +5,7 @@ const path = require("path");
 const { URL } = require("url");
 const config = require("../config/app.config");
 const logger = require("../utils/logger.util");
+const statsService = require("./stats.service");
 
 /**
  * Helper to extract YouTube Video ID from various URL formats.
@@ -19,12 +20,22 @@ function extractVideoId(raw) {
     if (nested) {
       u = new URL(nested);
     }
-    if (u.hostname.includes("youtube.com")) {
+    const host = u.hostname.toLowerCase();
+    if (host.includes("youtube.com") || host.includes("youtu.be")) {
+      if (host === "youtu.be") {
+        return u.pathname.slice(1).split("?")[0].split("&")[0] || null;
+      }
+      if (u.pathname.startsWith("/shorts/")) {
+        return u.pathname.split("/")[2] || null;
+      }
+      if (u.pathname.startsWith("/embed/")) {
+        return u.pathname.split("/")[2] || null;
+      }
+      if (u.pathname.startsWith("/v/")) {
+        return u.pathname.split("/")[2] || null;
+      }
       const id = u.searchParams.get("v");
       return id || null;
-    }
-    if (u.hostname === "youtu.be") {
-      return u.pathname.slice(1).split("?")[0] || null;
     }
   } catch (_) {}
   return null;
@@ -56,7 +67,8 @@ class RapidApiService {
       method: "GET",
       headers: {
         "x-rapidapi-key": config.rapidApiKey,
-        "x-rapidapi-host": config.rapidApiHost
+        "x-rapidapi-host": config.rapidApiHost,
+        "Content-Type": "application/json"
       }
     };
 
@@ -130,6 +142,7 @@ class RapidApiService {
           filesize: info.filesize || null,
           video: false,
           audio: true,
+          url: info.link,
           directLink: info.link
         }
       ]
@@ -183,6 +196,8 @@ class RapidApiService {
     job.filename = targetFileName;
     job.filePath = targetFilePath;
     job.updatedAt = Date.now();
+    const durationMs = Date.now() - (job.createdAt || Date.now());
+    statsService.recordHit("rapidapi", { url, filename: targetFileName, id: downloadId, durationMs });
   }
 
   /**
